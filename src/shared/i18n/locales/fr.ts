@@ -218,7 +218,8 @@ export const fr: Record<TranslationKey, string> = {
   'tenants.archived.empty': 'Aucun locataire archivé.',
   'tenants.archived.noResults': 'Aucun locataire archivé ne correspond à votre recherche.',
   'tenants.archived.search': 'Rechercher des locataires archivés',
-  'tenants.archived.resultCount': '{count} locataires archivés correspondants',
+  'tenants.archived.resultCountOne': '1 locataire archivé correspondant',
+  'tenants.archived.resultCountMany': '{count} locataires archivés correspondants',
 
   'tenants.create.title': 'Nouveau locataire',
   'tenants.edit.title': 'Modifier le locataire',

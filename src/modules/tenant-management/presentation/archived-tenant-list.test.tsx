@@ -81,6 +81,7 @@ describe('ArchivedTenantList', () => {
 
     expect(textShown(root, 'No archived tenants.')).toBe(true);
     expect(textShown(root, 'No archived tenants match your search.')).toBe(false);
+    expect(textShown(root, '0 matching archived tenants')).toBe(false);
   });
 
   it('shows no empty message before the first load completes', async () => {
@@ -127,12 +128,36 @@ describe('ArchivedTenantList', () => {
       archivedTotal: 5,
     });
 
+    // The count comes from the unpaginated total, not the two loaded rows.
     expect(textShown(root, '5 matching archived tenants')).toBe(true);
+    expect(textShown(root, '2 matching archived tenants')).toBe(false);
 
     await act(async () => {
       findButton(root, 'Load more').onPress();
     });
     expect(onLoadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the singular count for exactly one archived tenant', async () => {
+    const { root } = await renderList({
+      tenants: [archivedTenant('tenant-1', 'Amina Njeri')],
+      total: 1,
+      archivedTotal: 1,
+    });
+
+    expect(textShown(root, '1 matching archived tenant')).toBe(true);
+    expect(textShown(root, '1 matching archived tenants')).toBe(false);
+  });
+
+  it('uses the plural count for more than one archived tenant', async () => {
+    const { root } = await renderList({
+      tenants: [archivedTenant('tenant-1', 'Amina Njeri')],
+      total: 2,
+      archivedTotal: 2,
+    });
+
+    expect(textShown(root, '2 matching archived tenants')).toBe(true);
+    expect(textShown(root, '1 matching archived tenant')).toBe(false);
   });
 
   it('hides Load more when every matching row is displayed', async () => {
@@ -212,5 +237,17 @@ describe('ArchivedTenantList', () => {
         'Aucun locataire archivé ne correspond à votre recherche.',
       ),
     ).toBe(true);
+  });
+
+  it('renders the French singular count for one archived tenant', async () => {
+    setLocale('fr');
+    const { root } = await renderList({
+      tenants: [archivedTenant('tenant-1', 'Amina Njeri')],
+      total: 1,
+      archivedTotal: 1,
+    });
+
+    expect(textShown(root, '1 locataire archivé correspondant')).toBe(true);
+    expect(textShown(root, '1 locataires archivés correspondants')).toBe(false);
   });
 });

@@ -187,7 +187,7 @@ describe('ArchivedTenantListScreen', () => {
 
     const renderer = await renderScreen();
     expect(textShown(renderer.root, 'Amina Njeri')).toBe(true);
-    expect(textShown(renderer.root, '1 matching archived tenants')).toBe(true);
+    expect(textShown(renderer.root, '1 matching archived tenant')).toBe(true);
 
     await act(async () => {
       findButton(renderer.root, 'View details').onPress();
@@ -294,7 +294,7 @@ describe('ArchivedTenantListScreen', () => {
     expect(textShown(renderer.root, 'Brian Otieno')).toBe(true);
     expect(textShown(renderer.root, 'Archived 0')).toBe(false);
     expect(renderedNames(renderer.root)).toEqual([]);
-    expect(textShown(renderer.root, '1 matching archived tenants')).toBe(true);
+    expect(textShown(renderer.root, '1 matching archived tenant')).toBe(true);
     expect(findButtonCount(renderer.root, 'Load more')).toBe(0);
     expect(listArchivedTenants.execute).toHaveBeenLastCalledWith({ search: 'brian' });
 
@@ -311,7 +311,7 @@ describe('ArchivedTenantListScreen', () => {
 
     expect(textShown(renderer.root, 'Élodie Durand')).toBe(true);
     expect(textShown(renderer.root, 'Brian Otieno')).toBe(false);
-    expect(textShown(renderer.root, '1 matching archived tenants')).toBe(true);
+    expect(textShown(renderer.root, '1 matching archived tenant')).toBe(true);
   });
 
   it('distinguishes no archived tenants from a search without matches', async () => {
@@ -433,7 +433,7 @@ describe('ArchivedTenantListScreen', () => {
     expect(textShown(renderer.root, 'Amina Njeri')).toBe(true);
     expect(textShown(renderer.root, 'Brian Otieno')).toBe(false);
     expect(textShown(renderer.root, 'No archived tenants match your search.')).toBe(false);
-    expect(textShown(renderer.root, '1 matching archived tenants')).toBe(true);
+    expect(textShown(renderer.root, '1 matching archived tenant')).toBe(true);
     expect(listArchivedTenants.execute).toHaveBeenLastCalledWith({ search: 'amina' });
   });
 

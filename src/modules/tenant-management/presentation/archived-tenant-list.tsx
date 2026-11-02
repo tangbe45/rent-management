@@ -73,7 +73,9 @@ export function ArchivedTenantList({
       {hasResults ? (
         <>
           <Text style={styles.subtitle}>
-            {t('tenants.archived.resultCount', { count: total })}
+            {total === 1
+              ? t('tenants.archived.resultCountOne')
+              : t('tenants.archived.resultCountMany', { count: total })}
           </Text>
           {tenants.map((tenant) => (
             <Card key={tenant.id}>
