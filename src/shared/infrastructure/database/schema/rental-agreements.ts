@@ -1,4 +1,6 @@
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { foreignKey, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+
+import { tenants } from './tenants';
 
 /**
  * Rental agreements. Monetary amounts are integer minor units (for example
@@ -28,6 +30,18 @@ export const rentalAgreements = sqliteTable(
     updatedAt: integer('updated_at').notNull(),
   },
   (table) => [
+    /**
+     * An agreement can never point at a tenant that does not exist, and a
+     * tenant with agreements can never be physically deleted. Tenant deletion
+     * is not part of the MVP; archiving is unaffected.
+     */
+    foreignKey({
+      columns: [table.tenantId],
+      foreignColumns: [tenants.id],
+      name: 'rental_agreements_tenant_id_fk',
+    })
+      .onUpdate('no action')
+      .onDelete('restrict'),
     index('rental_agreements_tenant_id_idx').on(table.tenantId),
     index('rental_agreements_space_id_idx').on(table.spaceId),
     index('rental_agreements_start_date_idx').on(table.startDate),

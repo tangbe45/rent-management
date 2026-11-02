@@ -64,6 +64,13 @@
       "when": 1793623548061,
       "tag": "0008_property_space_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1793642545233,
+      "tag": "0009_rental_agreement_tenant_fk",
+      "breakpoints": true
     }
   ]
 }
