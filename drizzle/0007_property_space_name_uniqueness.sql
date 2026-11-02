@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX `property_spaces_active_parented_name_idx` ON `property_spaces` (`property_id`,`parent_space_id`,`name`) WHERE parent_space_id IS NOT NULL AND archived_at IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `property_spaces_active_root_name_idx` ON `property_spaces` (`property_id`,`name`) WHERE parent_space_id IS NULL AND archived_at IS NULL;

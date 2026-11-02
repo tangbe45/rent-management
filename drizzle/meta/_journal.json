@@ -1,0 +1,62 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1791428568841,
+      "tag": "0000_busy_paibok",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1791458582768,
+      "tag": "0001_puzzling_husk",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791504430635,
+      "tag": "0002_yummy_yellowjacket",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791527335022,
+      "tag": "0003_dear_toxin",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791546231188,
+      "tag": "0004_jittery_lightspeed",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1791561888760,
+      "tag": "0005_white_namorita",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791599029683,
+      "tag": "0006_receipts_and_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791642855579,
+      "tag": "0007_property_space_name_uniqueness",
+      "breakpoints": true
+    }
+  ]
+}
