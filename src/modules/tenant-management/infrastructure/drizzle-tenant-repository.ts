@@ -1,5 +1,10 @@
-import { and, count, eq, isNotNull, isNull, or, sql, type AnyColumn, type SQL } from 'drizzle-orm';
+import { and, count, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 
+import {
+  normalizeSearchText,
+  SEARCH_FIELD_SEPARATOR_CODE_POINT,
+  SEARCH_TEXT_FOLDS,
+} from '../../../shared/domain/search-text';
 import type { Database } from '../../../shared/infrastructure/database/connection';
 import { tenants } from '../../../shared/infrastructure/database/schema/tenants';
 import { Tenant, type TenantData } from '../domain/tenant';
@@ -21,33 +26,49 @@ export function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, (character) => `${LIKE_ESCAPE_CHARACTER}${character}`);
 }
 
-/**
- * SQLite applies `ESCAPE` to a single `LIKE` expression, so each column needs
- * its own clause. Wrapping an `OR` of several `LIKE`s in one `ESCAPE` would be
- * invalid SQL, hence this per-column helper.
- */
-function likeLiteral(column: AnyColumn, pattern: string): SQL {
-  return sql`${column} like ${pattern} escape '\\'`;
+function quoteSqlString(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
 }
 
 /**
+ * Builds a SQLite expression that produces exactly the text
+ * `buildSearchableText` produces in JavaScript: the four searchable fields
+ * joined by the field separator, then folded and lower-cased.
+ *
+ * `LOWER()` is ASCII-only in SQLite, so non-ASCII case and diacritics are
+ * removed by the `replace` chain generated from the shared fold table. Applying
+ * `LOWER()` afterwards mirrors the ASCII-only case folding performed by
+ * `normalizeSearchText`, keeping both representations identical for every
+ * input rather than only for ASCII.
+ */
+function tenantSearchText(): SQL {
+  const separator = sql.raw(`char(${SEARCH_FIELD_SEPARATOR_CODE_POINT})`);
+  let expression = sql`coalesce(${tenants.fullName}, '')`;
+  for (const column of [tenants.phone, tenants.secondPhoneNumber, tenants.email]) {
+    expression = sql`${expression} || ${separator} || coalesce(${column}, '')`;
+  }
+  for (const [from, to] of SEARCH_TEXT_FOLDS) {
+    expression = sql`replace(${expression}, ${sql.raw(quoteSqlString(from))}, ${sql.raw(quoteSqlString(to))})`;
+  }
+  return sql`lower(${expression})`;
+}
+
+const TENANT_SEARCH_TEXT = tenantSearchText();
+
+/**
  * Builds the literal substring predicate used by tenant search over full name,
- * phone, second phone and email. Returns `undefined` for an empty term, which
- * lets callers skip the condition entirely. The value is always bound as a
- * parameter; only the fixed `ESCAPE` character appears in the SQL source.
+ * phone, second phone and email. Returns `undefined` for an empty normalized
+ * term, which lets callers skip the condition entirely. The term is always
+ * bound as a parameter; only compile-time fold constants appear in the SQL
+ * source.
  */
 export function tenantSearchCondition(search: string): SQL | undefined {
-  const escaped = escapeLikePattern(search.toLowerCase());
-  if (escaped.length === 0) {
+  const normalized = normalizeSearchText(search);
+  if (normalized.length === 0) {
     return undefined;
   }
-  const pattern = `%${escaped}%`;
-  return or(
-    likeLiteral(tenants.fullName, pattern),
-    likeLiteral(tenants.phone, pattern),
-    likeLiteral(tenants.secondPhoneNumber, pattern),
-    likeLiteral(tenants.email, pattern),
-  );
+  const pattern = `%${escapeLikePattern(normalized)}%`;
+  return sql`${TENANT_SEARCH_TEXT} like ${pattern} escape '\\'`;
 }
 
 /**

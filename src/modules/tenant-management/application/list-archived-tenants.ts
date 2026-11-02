@@ -15,4 +15,13 @@ export class ListArchivedTenants {
   execute(query: TenantQuery = {}): TenantPage {
     return this.deps.tenants.findArchived(normalizeTenantQuery(query));
   }
+
+  /**
+   * Number of archived tenants regardless of any search term. The archived list
+   * uses it to tell "no archived tenants exist" apart from "the search matched
+   * nothing" without inferring either from the current page.
+   */
+  count(): number {
+    return this.deps.tenants.findArchived(normalizeTenantQuery({ limit: 1 })).total;
+  }
 }
