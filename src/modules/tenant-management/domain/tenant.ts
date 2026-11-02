@@ -56,6 +56,19 @@ function normalizeOptionalText(value: string | null | undefined): string | null 
   return text.length === 0 ? null : text;
 }
 
+/**
+ * Resolves an editable optional field before its normalizer runs. An omitted
+ * field (`undefined`) keeps the stored value so a partial update cannot erase
+ * data; an explicit `null` is passed through and clears it, exactly like a
+ * blank string. Non-blank strings replace the stored value.
+ */
+function resolveUpdatedOptional(
+  incoming: string | null | undefined,
+  current: string | null,
+): string | null {
+  return incoming === undefined ? current : incoming;
+}
+
 function normalizePhone(value: string | null | undefined): string | null {
   const phone = normalizeOptionalText(value);
   if (phone === null) {
@@ -183,6 +196,11 @@ export class Tenant {
   /**
    * Applies the editable fields while preserving identity, `createdAt` and the
    * current lifecycle state. Editing never archives or restores a tenant.
+   *
+   * Optional fields follow a partial-update contract: omitting a field
+   * (`undefined`) keeps its stored value, while an explicit `null`, an empty
+   * string or a whitespace-only string clears it. Non-blank strings are trimmed
+   * and validated by the usual field rules. `fullName` remains required.
    */
   update(input: {
     fullName: string;
@@ -196,11 +214,13 @@ export class Tenant {
     return new Tenant(
       this.id,
       normalizeFullName(input.fullName),
-      normalizePhone(input.phone),
-      normalizePhone(input.secondPhoneNumber),
-      normalizeEmail(input.email),
-      normalizeNationalId(input.nationalIdCardNumber),
-      normalizeNotes(input.notes),
+      normalizePhone(resolveUpdatedOptional(input.phone, this.phone)),
+      normalizePhone(resolveUpdatedOptional(input.secondPhoneNumber, this.secondPhoneNumber)),
+      normalizeEmail(resolveUpdatedOptional(input.email, this.email)),
+      normalizeNationalId(
+        resolveUpdatedOptional(input.nationalIdCardNumber, this.nationalIdCardNumber),
+      ),
+      normalizeNotes(resolveUpdatedOptional(input.notes, this.notes)),
       this.createdAt,
       input.updatedAt,
       this.archivedAt,

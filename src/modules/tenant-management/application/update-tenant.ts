@@ -3,6 +3,15 @@ import type { Tenant } from '../domain/tenant';
 import type { TenantRepository } from '../domain/tenant-repository';
 import { TenantNotFoundError } from './errors';
 
+/**
+ * Editable tenant fields. `fullName` is required; the optional fields follow a
+ * partial-update contract:
+ *
+ * - omitted (`undefined`) leaves the stored value unchanged;
+ * - `null` explicitly clears the value;
+ * - an empty or whitespace-only string normalizes to `null`, clearing it;
+ * - a non-empty string is trimmed, validated and replaces the stored value.
+ */
 export interface UpdateTenantInput {
   id: string;
   fullName: string;

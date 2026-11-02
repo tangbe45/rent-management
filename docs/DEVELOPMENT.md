@@ -662,6 +662,8 @@ The Tenant slice is the sixth vertical slice. A **Tenant** is the person who ren
 - `GetTenant` — returns `Tenant | null`; a missing id is not an error. Both active and archived tenants are retrievable.
 - `ListTenants` / `ListArchivedTenants` — active and archived tenants respectively; the two lists never mix.
 - `UpdateTenant`, `ArchiveTenant`, `RestoreTenant` — load by id first and throw `TenantNotFoundError` when absent.
+- `UpdateTenant` — follows a partial-update contract for the optional fields (`phone`, `secondPhoneNumber`, `email`, `nationalIdCardNumber`, `notes`): omitting a property (`undefined`) preserves the stored value, while `null` explicitly clears it. An empty or whitespace-only string still normalizes to `null`; a non-empty string is trimmed, validated and replaces the stored value. `fullName` remains required.
+- The edit form always submits complete values, so its behaviour is unaffected; the partial-update semantics matter to application callers that omit optional properties.
 
 Domain errors: `InvalidTenantNameError`, `InvalidTenantPhoneError`, `InvalidTenantEmailError`, `InvalidTenantNationalIdError`, `InvalidTenantNotesError`, `TenantAlreadyArchivedError`, `TenantAlreadyActiveError`. Application errors: `TenantNotFoundError`, `ArchiveBlockedByActiveTenantRentalAgreementsError`.
 

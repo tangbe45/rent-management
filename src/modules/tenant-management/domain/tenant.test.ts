@@ -189,6 +189,114 @@ describe('Tenant update', () => {
       /name is required/,
     );
   });
+
+  it('preserves omitted optional fields on a partial update', () => {
+    const original = createTenant({
+      phone: '+254 700 111 222',
+      secondPhoneNumber: '0712 345 678',
+      email: 'amina@example.com',
+      nationalIdCardNumber: '0012345',
+      notes: 'Pays on time',
+    });
+
+    const updated = original.update({ fullName: 'Amina Wanjiru', updatedAt: 5000 });
+
+    expect(updated.fullName).toBe('Amina Wanjiru');
+    expect(updated.phone).toBe('+254 700 111 222');
+    expect(updated.secondPhoneNumber).toBe('0712 345 678');
+    expect(updated.email).toBe('amina@example.com');
+    expect(updated.nationalIdCardNumber).toBe('0012345');
+    expect(updated.notes).toBe('Pays on time');
+    expect(updated.updatedAt).toBe(5000);
+  });
+
+  it('clears optional fields when they are explicitly null', () => {
+    const original = createTenant({
+      phone: '+254 700 111 222',
+      secondPhoneNumber: '0712 345 678',
+      email: 'amina@example.com',
+      nationalIdCardNumber: '0012345',
+      notes: 'Pays on time',
+    });
+
+    const updated = original.update({
+      fullName: 'Amina Wanjiru',
+      phone: null,
+      secondPhoneNumber: null,
+      email: null,
+      nationalIdCardNumber: null,
+      notes: null,
+      updatedAt: 5000,
+    });
+
+    expect(updated.phone).toBeNull();
+    expect(updated.secondPhoneNumber).toBeNull();
+    expect(updated.email).toBeNull();
+    expect(updated.nationalIdCardNumber).toBeNull();
+    expect(updated.notes).toBeNull();
+  });
+
+  it('still clears optional fields when they are empty or whitespace-only', () => {
+    const original = createTenant({
+      phone: '+254 700 111 222',
+      secondPhoneNumber: '0712 345 678',
+      email: 'amina@example.com',
+      nationalIdCardNumber: '0012345',
+      notes: 'Pays on time',
+    });
+
+    const updated = original.update({
+      fullName: 'Amina Wanjiru',
+      phone: '',
+      secondPhoneNumber: '   ',
+      email: '',
+      nationalIdCardNumber: '  ',
+      notes: '   ',
+      updatedAt: 5000,
+    });
+
+    expect(updated.phone).toBeNull();
+    expect(updated.secondPhoneNumber).toBeNull();
+    expect(updated.email).toBeNull();
+    expect(updated.nationalIdCardNumber).toBeNull();
+    expect(updated.notes).toBeNull();
+  });
+
+  it('trims non-blank optional fields on update', () => {
+    const updated = createTenant().update({
+      fullName: '  Amina Wanjiru  ',
+      phone: '  +254 700 111 222  ',
+      secondPhoneNumber: '  0712 345 678  ',
+      email: '  amina@example.com  ',
+      nationalIdCardNumber: '  0012345  ',
+      notes: '  Pays on time  ',
+      updatedAt: 5000,
+    });
+
+    expect(updated.fullName).toBe('Amina Wanjiru');
+    expect(updated.phone).toBe('+254 700 111 222');
+    expect(updated.secondPhoneNumber).toBe('0712 345 678');
+    expect(updated.email).toBe('amina@example.com');
+    expect(updated.nationalIdCardNumber).toBe('0012345');
+    expect(updated.notes).toBe('Pays on time');
+  });
+
+  it('preserves identity, createdAt and archivedAt while bumping updatedAt', () => {
+    const archived = createTenant({
+      phone: '+254 700 111 222',
+      email: 'amina@example.com',
+    }).archive(2000);
+
+    const updated = archived.update({ fullName: 'Renamed', updatedAt: 5000 });
+
+    expect(updated.id).toBe('tenant-1');
+    expect(updated.createdAt).toBe(1000);
+    expect(updated.archivedAt).toBe(2000);
+    expect(updated.isArchived).toBe(true);
+    expect(updated.updatedAt).toBe(5000);
+    expect(updated.phone).toBe('+254 700 111 222');
+    expect(updated.email).toBe('amina@example.com');
+  });
 });
 
 describe('Tenant hydration', () => {
