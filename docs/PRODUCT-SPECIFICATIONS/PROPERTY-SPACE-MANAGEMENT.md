@@ -1,6 +1,6 @@
 # Rental Manager — Property & Space Management Specification
 
-**Status:** Product decisions agreed; implementation pending  
+**Status:** Product decisions agreed; implementation completed  
 **Module:** Property Management  
 **Related module:** Rental Agreement Management
 
