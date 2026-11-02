@@ -213,6 +213,9 @@ export const en = {
 
   'tenants.archived.title': 'Archived tenants',
   'tenants.archived.empty': 'No archived tenants.',
+  'tenants.archived.noResults': 'No archived tenants match your search.',
+  'tenants.archived.search': 'Search archived tenants',
+  'tenants.archived.resultCount': '{count} matching archived tenants',
 
   'tenants.create.title': 'New tenant',
   'tenants.edit.title': 'Edit tenant',
