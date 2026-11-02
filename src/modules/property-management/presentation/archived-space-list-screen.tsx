@@ -10,6 +10,7 @@ import {
   restorePropertySpace,
 } from '../infrastructure/composition-root';
 import { ArchivedSpaceList } from './archived-space-list';
+import { confirmLifecycleAction } from './confirmation';
 import { PropertyMessage } from './property-ui';
 import { spaceErrorMessage } from './space-error-message';
 
@@ -47,13 +48,23 @@ export function ArchivedSpaceListScreen({ propertyId }: { propertyId: string }) 
   }
 
   const handleRestore = (spaceId: string) => {
-    try {
-      restorePropertySpace.execute({ id: spaceId });
-      setError(undefined);
-      reload();
-    } catch (caught) {
-      setError(spaceErrorMessage(t, caught));
-    }
+    confirmLifecycleAction(
+      {
+        title: t('spaces.confirm.restore.title'),
+        message: t('spaces.confirm.restore.body'),
+        confirmLabel: t('spaces.action.restore'),
+        cancelLabel: t('common.cancel'),
+      },
+      () => {
+        try {
+          restorePropertySpace.execute({ id: spaceId });
+          setError(undefined);
+          reload();
+        } catch (caught) {
+          setError(spaceErrorMessage(t, caught));
+        }
+      },
+    );
   };
 
   return (

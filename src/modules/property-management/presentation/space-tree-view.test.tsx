@@ -55,10 +55,12 @@ async function renderTree(spaces: readonly PropertySpace[], options: RenderOptio
   const onArchive = options.spies?.onArchive ?? jest.fn();
   const expanded = new Set(options.expanded ?? []);
   const nodes = flattenSpaceTree(spaces);
+  const availability = new Map(spaces.map((space) => [space.id, space.rentable ? 'AVAILABLE' : 'NOT_RENTABLE'] as const));
 
   const element = (
     <SpaceTreeView
       nodes={nodes}
+      availability={availability}
       isExpanded={(id) => expanded.has(id)}
       onToggle={onToggle}
       onOpen={onOpen}
@@ -79,6 +81,7 @@ async function renderTree(spaces: readonly PropertySpace[], options: RenderOptio
       renderer.update(
         <SpaceTreeView
           nodes={nodes}
+          availability={availability}
           isExpanded={(id) => next.has(id)}
           onToggle={onToggle}
           onOpen={onOpen}
@@ -107,6 +110,8 @@ describe('SpaceTreeView', () => {
     expect(textShown(root, 'Building · 2 sub-spaces · Not rentable on its own')).toBe(true);
     expect(textShown(root, 'Room · Can be rented')).toBe(true);
     expect(textShown(root, 'Room · Not rentable on its own')).toBe(true);
+    expect(textShown(root, 'Available')).toBe(true);
+    expect(textShown(root, 'Not rentable')).toBe(true);
   });
 
   it('exposes an expand control for parents and hides children while collapsed', async () => {

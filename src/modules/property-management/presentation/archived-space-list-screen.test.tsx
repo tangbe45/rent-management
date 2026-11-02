@@ -10,6 +10,11 @@ import {
   restorePropertySpace,
 } from '../infrastructure/composition-root';
 import { ArchivedSpaceListScreen } from './archived-space-list-screen';
+import {
+  cancelLatestAlert,
+  confirmLatestAlert,
+  installAlertSpy,
+} from './alert-confirmation.test-support';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn() },
@@ -89,6 +94,11 @@ describe('ArchivedSpaceListScreen', () => {
     store = [];
     jest.mocked(getProperty.execute).mockReturnValue(buildProperty());
     jest.mocked(listPropertySpaces.execute).mockImplementation(() => [...store]);
+    installAlertSpy();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('lists only archived spaces', async () => {
@@ -117,6 +127,19 @@ describe('ArchivedSpaceListScreen', () => {
     expect(textShown(renderer.root, 'Old Store')).toBe(true);
   });
 
+  it('does nothing when the restore confirmation is cancelled', async () => {
+    store.push(space('old', 'Old Store', 'SHOP', 2000));
+    const renderer = await renderScreen();
+
+    await act(async () => {
+      findButton(renderer.root, 'Restore')?.onPress();
+    });
+    cancelLatestAlert();
+
+    expect(restorePropertySpace.execute).not.toHaveBeenCalled();
+    expect(textShown(renderer.root, 'Old Store')).toBe(true);
+  });
+
   it('restores a space through the use case and removes it immediately', async () => {
     store.push(space('old', 'Old Store', 'SHOP', 2000));
     const renderer = await renderScreen();
@@ -126,6 +149,8 @@ describe('ArchivedSpaceListScreen', () => {
     await act(async () => {
       findButton(renderer.root, 'Restore')?.onPress();
     });
+    expect(restorePropertySpace.execute).not.toHaveBeenCalled();
+    confirmLatestAlert();
 
     expect(restorePropertySpace.execute).toHaveBeenCalledWith({ id: 'old' });
     expect(textShown(renderer.root, 'Old Store')).toBe(false);

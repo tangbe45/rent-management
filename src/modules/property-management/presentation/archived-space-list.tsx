@@ -6,6 +6,7 @@ import { Card, KeyboardSafeContainer, styles } from '../../account/presentation/
 import type { PropertySpace } from '../domain/property-space';
 import { listItemStyles } from './list-item-styles';
 import { SecondaryButton, TextLink } from './property-ui';
+import { SpaceAvailabilityBadge } from './space-availability-badge';
 import { spaceTypeEmoji, spaceTypeLabelKey } from './space-emoji';
 
 interface ArchivedSpaceListProps {
@@ -47,6 +48,7 @@ export function ArchivedSpaceList({
             <Text style={listItemStyles.address}>
               {`${spaceTypeEmoji(space.type)} ${t(spaceTypeLabelKey(space.type))}`}
             </Text>
+            <SpaceAvailabilityBadge label="ARCHIVED" />
             <SecondaryButton title={t('spaces.action.open')} onPress={() => onOpen(space.id)} />
             <SecondaryButton
               title={t('spaces.action.restore')}

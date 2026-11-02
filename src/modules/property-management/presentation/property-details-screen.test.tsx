@@ -1,9 +1,11 @@
 import { useFocusEffect } from 'expo-router';
-import { Text } from 'react-native';
+import { Alert, Text } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
+import { ArchiveBlockedByActiveRentalAgreementsError } from '../application/errors';
 import { Property } from '../domain/property';
 import { archiveProperty, getProperty, restoreProperty } from '../infrastructure/composition-root';
+import { confirmLatestAlert, installAlertSpy } from './alert-confirmation.test-support';
 import { PropertyDetailsScreen } from './property-details-screen';
 
 jest.mock('expo-router', () => ({
@@ -61,6 +63,11 @@ function emitFocus(): void {
 describe('PropertyDetailsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    installAlertSpy();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('reloads the property when the screen regains focus after an edit', async () => {
@@ -99,10 +106,38 @@ describe('PropertyDetailsScreen', () => {
     await act(async () => {
       findButton(renderer.root, 'Archive')?.props.onPress();
     });
+    expect(archiveProperty.execute).not.toHaveBeenCalled();
+    const archiveButtons = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2] as
+      | { style?: string }[]
+      | undefined;
+    expect(archiveButtons?.some((button) => button.style === 'destructive')).toBe(true);
+    confirmLatestAlert();
 
     expect(findButton(renderer.root, 'Restore')).toBeDefined();
     expect(findButton(renderer.root, 'Archive')).toBeUndefined();
     expect(archiveProperty.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a localized error when archiving the property is blocked by active rental agreements', async () => {
+    jest.mocked(getProperty.execute).mockReturnValue(buildProperty('property-1', 'Green Valley Estate'));
+    jest
+      .mocked(archiveProperty.execute)
+      .mockImplementationOnce(() => {
+        throw new ArchiveBlockedByActiveRentalAgreementsError('property-1');
+      });
+
+    const renderer = await renderScreen();
+    expect(textShown(renderer.root, 'This property cannot be archived because it has active rental agreements.')).toBe(false);
+
+    await act(async () => {
+      findButton(renderer.root, 'Archive')?.props.onPress();
+    });
+    expect(archiveProperty.execute).not.toHaveBeenCalled();
+    confirmLatestAlert();
+
+    expect(archiveProperty.execute).toHaveBeenCalledTimes(1);
+    expect(textShown(renderer.root, 'This property cannot be archived because it has active rental agreements.')).toBe(true);
+    expect(findButton(renderer.root, 'Archive')).toBeDefined();
   });
 
   it('reflects a restored property without leaving the screen', async () => {
@@ -121,6 +156,12 @@ describe('PropertyDetailsScreen', () => {
     await act(async () => {
       findButton(renderer.root, 'Restore')?.props.onPress();
     });
+    expect(restoreProperty.execute).not.toHaveBeenCalled();
+    const restoreButtons = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2] as
+      | { style?: string }[]
+      | undefined;
+    expect(restoreButtons?.some((button) => button.style === 'destructive')).toBe(false);
+    confirmLatestAlert();
 
     expect(findButton(renderer.root, 'Archive')).toBeDefined();
     expect(findButton(renderer.root, 'Restore')).toBeUndefined();

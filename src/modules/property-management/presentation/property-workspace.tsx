@@ -13,15 +13,20 @@ import {
 } from '../../account/presentation/setup/setup-ui';
 import type { Property } from '../domain/property';
 import type { PropertySpace } from '../domain/property-space';
+import type {
+  SpaceAvailability,
+  WorkspaceAvailabilitySummary,
+} from '../application/property-space-availability';
 import { listItemStyles } from './list-item-styles';
 import { SecondaryButton, TextLink } from './property-ui';
 import { flattenSpaceTree } from './space-tree';
 import { SpaceTreeView } from './space-tree-view';
-import { summarizeActiveSpaces } from './workspace-summary';
 
 interface PropertyWorkspaceProps {
   property: Property;
   spaces: readonly PropertySpace[];
+  availability: ReadonlyMap<string, SpaceAvailability>;
+  summary: WorkspaceAvailabilitySummary;
   expandedSpaceIds: ReadonlySet<string>;
   error?: string;
   onToggleSpace: (id: string) => void;
@@ -50,11 +55,14 @@ function SummaryStat({ value, label }: { value: number; label: string }) {
  * Primary management screen for a single property: heading, space summary,
  * expandable active-space tree and the property's secondary actions. Property
  * details and editing remain available through the header menu; archived spaces
- * live in their own secondary view. Counters are derived from persisted spaces.
+ * live in their own secondary view. Availability indicators are read-only and
+ * derived from local agreement data — never stored on the space.
  */
 export function PropertyWorkspace({
   property,
   spaces,
+  availability,
+  summary,
   expandedSpaceIds,
   error,
   onToggleSpace,
@@ -72,7 +80,6 @@ export function PropertyWorkspace({
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const activeSpaces = spaces.filter((space) => space.isActive);
-  const summary = summarizeActiveSpaces(spaces);
   const nodes = flattenSpaceTree(activeSpaces);
   const isExpanded = (id: string) => expandedSpaceIds.has(id);
 
@@ -109,9 +116,10 @@ export function PropertyWorkspace({
       {error ? <Text style={styles.fieldError}>{error}</Text> : null}
 
       <View style={workspaceStyles.summaryRow}>
-        <SummaryStat value={summary.activeSpaces} label={t('workspace.summary.activeSpaces')} />
         <SummaryStat value={summary.rentableSpaces} label={t('workspace.summary.rentable')} />
-        <SummaryStat value={summary.topLevelSpaces} label={t('workspace.summary.topLevel')} />
+        <SummaryStat value={summary.occupiedSpaces} label={t('workspace.summary.occupied')} />
+        <SummaryStat value={summary.upcomingSpaces} label={t('workspace.summary.upcoming')} />
+        <SummaryStat value={summary.availableSpaces} label={t('workspace.summary.available')} />
       </View>
 
       <Text style={workspaceStyles.sectionTitle}>
@@ -128,6 +136,7 @@ export function PropertyWorkspace({
         <>
           <SpaceTreeView
             nodes={nodes}
+            availability={availability}
             isExpanded={isExpanded}
             onToggle={onToggleSpace}
             onOpen={onOpenSpace}
@@ -180,10 +189,12 @@ const workspaceStyles = StyleSheet.create({
   },
   summaryRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.s,
   },
   stat: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '40%',
     backgroundColor: palette.surface,
     borderRadius: 16,
     borderWidth: 1,

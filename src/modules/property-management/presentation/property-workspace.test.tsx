@@ -1,6 +1,11 @@
 import { Text } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
+import {
+  projectSpaceAvailability,
+  summarizeAvailability,
+} from '../application/property-space-availability';
+import type { SpaceOccupancySnapshot } from '../application/space-occupancy-query';
 import { Property } from '../domain/property';
 import { PropertySpace, type PropertySpaceType } from '../domain/property-space';
 import { PropertyWorkspace } from './property-workspace';
@@ -51,6 +56,7 @@ async function renderWorkspace(
   property: Property,
   spaces: readonly PropertySpace[],
   expanded: readonly string[] = [],
+  occupancy: readonly SpaceOccupancySnapshot[] = [],
 ) {
   const spies = {
     onToggleSpace: jest.fn(),
@@ -66,12 +72,16 @@ async function renderWorkspace(
     onRestoreProperty: jest.fn(),
   };
   const expandedSet = new Set(expanded);
+  const availability = projectSpaceAvailability(spaces, occupancy);
+  const summary = summarizeAvailability(spaces, availability);
   let renderer!: ReactTestRenderer;
   await act(async () => {
     renderer = create(
       <PropertyWorkspace
         property={property}
         spaces={spaces}
+        availability={availability}
+        summary={summary}
         expandedSpaceIds={expandedSet}
         {...spies}
       />,
@@ -87,17 +97,29 @@ const activeSpaces = [
 ];
 
 describe('PropertyWorkspace', () => {
-  it('shows the property header, summary and spaces heading', async () => {
+  it('shows the property header, availability summary and spaces heading', async () => {
     const { root } = await renderWorkspace(buildProperty(), activeSpaces);
 
     expect(textShown(root, 'Green Valley Estate')).toBe(true);
     expect(textShown(root, '12 Main Street')).toBe(true);
     expect(textShown(root, '🌳 Spaces')).toBe(true);
-    expect(textShown(root, 'Active spaces')).toBe(true);
-    expect(textShown(root, 'Marked rentable')).toBe(true);
-    expect(textShown(root, 'Top level')).toBe(true);
-    expect(textShown(root, 3)).toBe(true);
-    expect(textShown(root, 1)).toBe(true);
+    expect(textShown(root, 'Rentable')).toBe(true);
+    expect(textShown(root, 'Occupied')).toBe(true);
+    expect(textShown(root, 'Upcoming')).toBe(true);
+    expect(textShown(root, 'Available')).toBe(true);
+    // Building is not rentable, so only Room 1 counts as rentable/available.
+    expect(textShown(root, 3)).toBe(false);
+    expect(textShown(root, 2)).toBe(false);
+  });
+
+  it('derives occupied and upcoming indicators from agreement occupancy', async () => {
+    const { root } = await renderWorkspace(buildProperty(), activeSpaces, ['building'], [
+      { spaceId: 'room-1', hasCurrentAgreement: true, hasUpcomingAgreement: false },
+      { spaceId: 'room-2', hasCurrentAgreement: false, hasUpcomingAgreement: true },
+    ]);
+
+    expect(textShown(root, 'Occupied')).toBe(true);
+    expect(textShown(root, 'Upcoming')).toBe(true);
   });
 
   it('guides the user to add a first space when there are none', async () => {

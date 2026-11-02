@@ -3,13 +3,16 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useTranslation } from '../../../shared/i18n';
 import { Card, palette, spacing } from '../../account/presentation/setup/setup-ui';
+import type { SpaceAvailability } from '../application/property-space-availability';
 import { listItemStyles } from './list-item-styles';
 import { SecondaryButton } from './property-ui';
+import { SpaceAvailabilityBadge } from './space-availability-badge';
 import { spaceTypeEmoji, spaceTypeLabelKey } from './space-emoji';
 import { visibleSpaceRows, type FlatSpaceNode } from './space-tree';
 
 interface SpaceTreeViewProps {
   nodes: readonly FlatSpaceNode[];
+  availability: ReadonlyMap<string, SpaceAvailability>;
   isExpanded: (id: string) => boolean;
   onToggle: (id: string) => void;
   onOpen: (id: string) => void;
@@ -26,6 +29,7 @@ interface SpaceTreeViewProps {
  */
 export function SpaceTreeView({
   nodes,
+  availability,
   isExpanded,
   onToggle,
   onOpen,
@@ -43,6 +47,7 @@ export function SpaceTreeView({
         const expanded = isExpanded(space.id);
         const hasChildren = childCount > 0;
         const menuOpen = openMenuId === space.id;
+        const status = availability.get(space.id);
         const childLabel =
           childCount === 1
             ? t('spaces.tree.childOne')
@@ -86,6 +91,7 @@ export function SpaceTreeView({
                 <View style={treeStyles.body}>
                   <Text style={listItemStyles.name}>{space.name}</Text>
                   <Text style={listItemStyles.address}>{secondaryLabel}</Text>
+                  {status ? <SpaceAvailabilityBadge label={status} /> : null}
                 </View>
               </Pressable>
 

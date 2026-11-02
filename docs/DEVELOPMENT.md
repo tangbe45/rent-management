@@ -337,7 +337,7 @@ Do not jump directly from a vague requirement to database tables.
 
 ## 15. Database and SQLite/Drizzle foundation — sealed (direction)
 
-- `src/shared/infrastructure/database/connection.ts` opens the SQLite database and exposes the Drizzle instance. This is the single, shared database connection entry point.
+- `src/shared/infrastructure/database/connection.ts` opens the SQLite database and exposes the Drizzle instance. This is the single, shared database connection entry point. SQLite disables foreign keys by default, so the connection executes `PRAGMA foreign_keys = ON` immediately after opening; every query then runs with foreign-key enforcement. Migrations cannot toggle this pragma inside their transaction and use `PRAGMA defer_foreign_keys = ON` instead (see §21).
 - Drizzle schema files live under `src/shared/infrastructure/database/schema/`. Each concept adds its own schema file(s) when that concept is modeled and implemented.
 - `drizzle.config.ts` drives `drizzle-kit` migration generation. Generated migrations go to `drizzle/` and are applied at runtime via the Drizzle Expo SQLite migrator. The **sync** Expo SQLite driver is in use (`openDatabaseSync`).
 - Business tables are created **per concept**, when that concept is implemented — never up front. The `accounts` and `subscriptions` tables exist because Application Setup was the first implemented slice; the `properties` table exists because the Property slice (§20) was implemented; the `property_spaces` table exists because the Property Space slice (§21) was implemented.
@@ -577,9 +577,31 @@ The Property Space slice is the fifth vertical slice. A **Property Space** is a 
 - `parentSpaceId = null` means a root space. A child's `propertyId` must equal its parent's `propertyId`; a space can never move across properties. The hierarchy must never contain cycles.
 - **No `status` column, no `isArchived` field, no availability/occupancy field, and no permanent delete.** Lifecycle is derived from `archivedAt`: `null` = active, timestamp = archived. Restoring returns the same identity and clears `archivedAt` without changing `rentable`.
 
-### Rental availability is not stored
+### Availability projection (derived, read-only)
 
-Availability (`available`, `rented`, `occupied`, …) is deliberately **not** a stored field. A space's current rental availability will later be derived from Rental Agreements. For example, if a parent has an active agreement, the parent and its descendants are unavailable for independent agreements — but the descendants remain active Property Spaces and **nothing is archived**. When that agreement ends, availability returns with no restore operation. Enforcing this ancestor/descendant conflict belongs to the future Rental Agreement module.
+Availability is deliberately **not** a stored field. `GetPropertyWorkspaceOverview` (application layer) reads a property's spaces and the occupancy facts supplied by Rental Agreement Management, then projects **exactly one** read-only label per space with a fixed precedence:
+
+1. `NOT_RENTABLE` — the space has `rentable = false`.
+2. `ARCHIVED` — the space itself is archived.
+3. `SUSPENDED` — an ancestor is archived, at any depth. The space stays active but cannot receive new rental agreements until the ancestor is restored.
+4. `OCCUPIED` — a current agreement exists.
+5. `UPCOMING` — only a future agreement exists.
+6. `AVAILABLE` — rentable, active, and no current or upcoming agreement.
+
+Occupancy crosses the module boundary through the application-level port `SpaceOccupancyQuery.findForSpaces(spaceIds, today)`, implemented by `AgreementSpaceOccupancyQuery` in Rental Agreement Management and wired in the composition roots. The workspace read model asks once per property (`findAll({ spaceIds })`, never once per space) and receives only `hasCurrentAgreement` / `hasUpcomingAgreement` facts — Property Management does not import rental-agreement domain or infrastructure. A current agreement wins over an upcoming one.
+
+The workspace summary (`summarizeAvailability`) counts rentable, non-archived spaces and partitions them into `occupied`, `upcoming` and `available`. Suspended spaces are still counted as rentable but in none of those three buckets, so the three counters need not add up to the rentable total. Labels are computed on read and never persisted; badges are presentation-only.
+
+### Archive and restore confirmations
+
+Every archive/restore entry point (workspace, property details, space details, archived property list and archived space list) asks for confirmation first through the shared `confirmLifecycleAction`, a thin wrapper over native `Alert.alert`. The copy states what happens and what is preserved:
+
+- archiving a property hides it from active lists while agreements, payments, receipts and history stay unchanged;
+- archiving a space with descendants explains that active descendants **remain active but are suspended from new agreements until the parent is restored**, while history stays unchanged;
+- archiving a leaf space explains that it leaves the active list only;
+- restores are confirmed with a simple prompt.
+
+The dialog is presentation/UX only: confirming runs the use case, which still validates and may reject the operation (for example an active rental agreement blocks archiving). Cancelling does nothing.
 
 ### Archiving
 
@@ -596,12 +618,19 @@ Archiving a space with active rental agreements must be blocked. As with Propert
 ### Infrastructure
 
 - Table `property_spaces` (`src/shared/infrastructure/database/schema/property-spaces.ts`), created by migration `drizzle/0002_yummy_yellowjacket.sql`, with indexes on `property_id`, `parent_space_id` and `archived_at`. Migration `drizzle/0007_property_space_name_uniqueness.sql` adds two **partial unique indexes** that scope active-name uniqueness exactly like the application check: `property_spaces_active_parented_name_idx` on `(property_id, parent_space_id, name)` where `parent_space_id IS NOT NULL AND archived_at IS NULL`, and `property_spaces_active_root_name_idx` on `(property_id, name)` where `parent_space_id IS NULL AND archived_at IS NULL`. Root spaces need their own index because SQLite treats `NULL` parents as distinct in a composite unique index.
+- Migration `drizzle/0008_property_space_integrity.sql` rebuilds `property_spaces` with storage-level integrity to back the application rules:
+  - `property_id` → `properties(id)` with `ON DELETE RESTRICT`, so a property can never be physically deleted while it still owns spaces;
+  - composite self-reference `(parent_space_id, property_id)` → `property_spaces(id, property_id)` with `ON DELETE RESTRICT`, so a parent must exist **in the same property** and a parent with children can never be deleted;
+  - `CHECK property_spaces_not_self_parent` — the composite key alone does not reject a row that is its own parent;
+  - unique index `property_spaces_id_property_id_unique` as the parent key required by that composite reference.
+  - No cascade anywhere: deletes are rejected (`RESTRICT`), not propagated. All lookup indexes and both partial name-uniqueness indexes are recreated by the rebuild.
+- The rebuild validates existing rows **before** touching the table using temporary `BEFORE INSERT` triggers that `RAISE(ABORT, …)` with actionable messages (orphan property, missing parent, cross-property parent, self parent). Rows are copied through an in-transaction temporary backup, then `PRAGMA defer_foreign_keys = ON` defers foreign-key checks to commit so a child may be stored before its parent. Any violation aborts the migration transaction, rolling back to the legacy table and data unchanged; after the data is fixed, the migration can be retried. `connection.ts` enables `PRAGMA foreign_keys = ON` for every connection (§15). `property-space-integrity.integrity.test.ts` exercises the migration on `node:sqlite` (enforcement, restrictive deletes, index preservation, rollback and retry).
 - `DrizzlePropertySpaceRepository` implements the `PropertySpaceRepository` port (`save` / `update` / `findById` / `findByPropertyId` / `findActiveSiblingByName`) on the synchronous Expo SQLite driver. The pure mapping helpers `toPropertySpaceData` / `toPropertySpaceRow` are exported and unit-tested without a database (same `expo-sqlite`-under-jest limitation as Property). `save` and `update` translate a `UNIQUE constraint failed` from these name indexes into the existing `PropertySpaceNameAlreadyExistsError`; unrelated SQLite errors are rethrown unchanged. The application prechecks in `CreatePropertySpace`, `UpdatePropertySpace`, `MovePropertySpace` and `RestorePropertySpace` remain for user-friendly feedback — the indexes (and this mapping) are the durable backstop.
 
 ### Presentation
 
 - Routes in `src/app/properties/[id]/spaces/`: `index` (archived spaces), `new` (create, optional `?parentSpaceId=`), `[spaceId]/index` (details), `[spaceId]/edit`. Each guards itself with `resolveProtectedRoute`; the existing `/properties/${string}` template in the `ApplicationRoute` union already covers them. There is no separate "Manage spaces" entry point: the **Property Workspace** (`/properties/[id]`, §20) is the primary place to browse and manage the space tree, with a "Property actions" header menu linking to Property Details, Edit, Archive/Restore and the archived-spaces list.
-- The workspace renders the active space tree with the pure `visibleSpaceRows(flattenSpaceTree(spaces), isExpanded)` helper: a collapsed-by-default, expandable tree where a row reveals/hides its whole subtree, leaves show no misleading disclosure control, and each row exposes a `⋮` menu (View details / Edit / Add sub-space / Archive). `flattenSpaceTree` annotates each node with `depth` and `childCount` (direct children). An emoji per type improves scanning; emojis are a presentation-only mapping (`space-emoji.ts`) and are never stored in the domain or database, and are never the only representation of a type. A header summary is derived from persisted spaces via the pure `summarizeActiveSpaces` helper (active spaces, rentable spaces, top-level spaces where a child of an archived parent counts as top level).
+- The workspace renders the active space tree with the pure `visibleSpaceRows(flattenSpaceTree(spaces), isExpanded)` helper: a collapsed-by-default, expandable tree where a row reveals/hides its whole subtree, leaves show no misleading disclosure control, and each row exposes a `⋮` menu (View details / Edit / Add sub-space / Archive). `flattenSpaceTree` annotates each node with `depth` and `childCount` (direct children). An emoji per type improves scanning; emojis are a presentation-only mapping (`space-emoji.ts`) and are never stored in the domain or database, and are never the only representation of a type. A 2×2 header summary is derived through `GetPropertyWorkspaceOverview` / `summarizeAvailability` (rentable, occupied, upcoming, available), and every active row shows its derived, read-only `SpaceAvailabilityBadge`; the archived-spaces list marks entries `ARCHIVED`. Indicators are recomputed on focus and are never stored.
 - Creating a sub-space from the workspace records a one-shot expansion hint (`requestExpandOnNextWorkspaceFocus(propertyId, parentId)` / `consumePendingExpansions(propertyId)`) so the workspace reopens with the new parent expanded. This is a presentation-only, in-memory cross-screen handoff; it is not persisted and must never be treated as state.
 - The shared create/edit form (`space-form.tsx`) answers the four questions with labelled sections: **Space type** (a touch-friendly, wrapping grid of tiles, each with the type emoji and localized label; the selected tile gets a border, tinted background and a checkmark), **Space name** (contextual placeholder per type, existing required/trim/uniqueness validation), **Where does it belong?** (the property shown as the root row, selectable by both label and `accessibilityLabel` "Top-level space", with existing active spaces indented by `depth + 1`) and **Can this space be rented on its own?** (two explicit mutually-exclusive Yes/No options with plain-language supporting text, not a raw `rentable` switch). A live summary preview (`{emoji} {name}` + `{parent} · {rentable}`) sits above the actions. The primary action reads `Save space`/`Save changes`; a secondary `Cancel` calls `router.back()`. Saves are synchronous (offline, single SQLite connection), so there is no in-progress window to disable.
 - In edit mode the parent picker still allows re-parenting; the container calls `MovePropertySpace` and `UpdatePropertySpace` accordingly. Parent options exclude the space itself, its descendants, archived spaces and spaces of other properties. None of this builds a second hierarchy model: it reuses `flattenSpaceTree` and `collectDescendantIds` from `space-tree.ts`.
@@ -609,7 +638,7 @@ Archiving a space with active rental agreements must be blocked. As with Propert
 
 ### Still deferred
 
-Rental availability is derived from the agreement, payment and receipt slices (§23–§25); the `property_spaces` table deliberately stores no rental data.
+Availability is derived only from Rental Agreements (§23); payments and receipts play no role in Property Management, and the `property_spaces` table deliberately stores no rental data. Deletion remains unsupported in the application: the database rejects physical deletion of a property that owns spaces or of a parent space that still has children, and never cascades.
 
 ---
 
@@ -884,7 +913,8 @@ These are intentionally not decided yet; leave them minimal and deferred until a
 - A Property is the overall physical property (building/estate); Property Spaces are the physical spaces inside it and play the role of rental units (no separate Rental Unit entity). Property names need not be unique.
 - Property lifecycle is derived from `archivedAt` (no status column, no permanent delete); archiving is blocked when active rental agreements exist, enforced through the application-level `ActiveRentalAgreementsQuery` port (§20).
 - A Property Space is a node in a per-property tree: `id`, `propertyId`, nullable `parentSpaceId`, `name`, controlled `type`, `rentable`, timestamps; lifecycle derived from `archivedAt`; active sibling names unique within the same parent, enforced by both application prechecks and SQLite partial unique indexes (§21).
-- A rentable space need not be a leaf and `rentable` is independent of `type`; rental availability is never stored and ancestor/descendant rental conflicts are enforced by the Rental Agreement module (§21, §23).
+- A rentable space need not be a leaf and `rentable` is independent of `type`; rental availability is never stored — it is projected with fixed precedence (not rentable → archived/suspended → occupied → upcoming → available) from Rental Agreement occupancy, and ancestor/descendant rental conflicts are enforced by the Rental Agreement module (§21, §23).
+- `property_spaces` has database-level integrity: restrictive foreign keys to the owning property and to the same-property parent, a self-parent `CHECK`, and no cascade; migration 0008 preflights existing rows and rolls back atomically on invalid data, while `PRAGMA foreign_keys = ON` is applied to every connection (§15, §21).
 - Archiving a space never cascades to its descendants; a parent can only be archived when no active rental agreements exist, via the application-level `SpaceActiveRentalAgreementsQuery` port (§21).
 - Localization uses a minimal shared, dependency-free i18n module (`src/shared/i18n`, English/French, `useTranslation`); all new UI text is translated (§20).
 - A Tenant is an independent entity (a person) with a required `fullName` and optional phone, second phone, email, national ID card number and notes; national-ID format is unrestricted and leading zeros are preserved; lifecycle is derived from `archivedAt` (no status column, no permanent delete) (§22).

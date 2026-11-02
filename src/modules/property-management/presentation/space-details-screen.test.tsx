@@ -1,7 +1,8 @@
 import { useFocusEffect } from 'expo-router';
-import { Text } from 'react-native';
+import { Alert, Text } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
+import { PropertySpaceCannotArchiveError } from '../application/property-space-errors';
 import { PropertySpace, type PropertySpaceType } from '../domain/property-space';
 import {
   archivePropertySpace,
@@ -10,6 +11,11 @@ import {
   restorePropertySpace,
 } from '../infrastructure/composition-root';
 import { SpaceDetailsScreen } from './space-details-screen';
+import {
+  cancelLatestAlert,
+  confirmLatestAlert,
+  installAlertSpy,
+} from './alert-confirmation.test-support';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn() },
@@ -79,6 +85,11 @@ describe('SpaceDetailsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.mocked(listPropertySpaces.execute).mockReturnValue([]);
+    installAlertSpy();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('reloads name, type, rentable and parent when the screen regains focus after an edit', async () => {
@@ -120,6 +131,73 @@ describe('SpaceDetailsScreen', () => {
     expect(useFocusEffect).toHaveBeenCalledTimes(1);
   });
 
+  it('shows a localized error when archiving the space is blocked by active rental agreements', async () => {
+    const active = buildSpace({ id: 'space-1', name: 'Room A' });
+    jest.mocked(getPropertySpace.execute).mockReturnValue(active);
+    jest
+      .mocked(archivePropertySpace.execute)
+      .mockImplementationOnce(() => {
+        throw new PropertySpaceCannotArchiveError('space-1');
+      });
+
+    const renderer = await renderScreen();
+    expect(textShown(renderer.root, 'This space cannot be archived because it has active rental agreements.')).toBe(false);
+
+    await act(async () => {
+      findButton(renderer.root, 'Archive')?.props.onPress();
+    });
+    expect(archivePropertySpace.execute).not.toHaveBeenCalled();
+    confirmLatestAlert();
+
+    expect(archivePropertySpace.execute).toHaveBeenCalledTimes(1);
+    expect(textShown(renderer.root, 'This space cannot be archived because it has active rental agreements.')).toBe(true);
+    expect(findButton(renderer.root, 'Archive')).toBeDefined();
+  });
+
+  it('does nothing when the space archive confirmation is cancelled', async () => {
+    jest
+      .mocked(getPropertySpace.execute)
+      .mockReturnValue(buildSpace({ id: 'space-1', name: 'Room A' }));
+
+    const renderer = await renderScreen();
+    await act(async () => {
+      findButton(renderer.root, 'Archive')?.props.onPress();
+    });
+
+    const archiveButtons = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2] as
+      | { style?: string }[]
+      | undefined;
+    expect(archiveButtons?.some((button) => button.style === 'destructive')).toBe(true);
+
+    cancelLatestAlert();
+
+    expect(archivePropertySpace.execute).not.toHaveBeenCalled();
+    expect(findButton(renderer.root, 'Archive')).toBeDefined();
+    expect(findButton(renderer.root, 'Restore')).toBeUndefined();
+  });
+
+  it('does nothing when the space restore confirmation is cancelled', async () => {
+    jest
+      .mocked(getPropertySpace.execute)
+      .mockReturnValue(buildSpace({ id: 'space-1', name: 'Room A' }).archive(2000));
+
+    const renderer = await renderScreen();
+    await act(async () => {
+      findButton(renderer.root, 'Restore')?.props.onPress();
+    });
+
+    const restoreButtons = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2] as
+      | { style?: string }[]
+      | undefined;
+    expect(restoreButtons?.some((button) => button.style === 'destructive')).toBe(false);
+
+    cancelLatestAlert();
+
+    expect(restorePropertySpace.execute).not.toHaveBeenCalled();
+    expect(findButton(renderer.root, 'Restore')).toBeDefined();
+    expect(findButton(renderer.root, 'Archive')).toBeUndefined();
+  });
+
   it('reflects an archived space without leaving the screen', async () => {
     const active = buildSpace({ id: 'space-1', name: 'Room A' });
     jest.mocked(getPropertySpace.execute).mockReturnValue(active);
@@ -132,6 +210,8 @@ describe('SpaceDetailsScreen', () => {
     await act(async () => {
       findButton(renderer.root, 'Archive')?.props.onPress();
     });
+    expect(archivePropertySpace.execute).not.toHaveBeenCalled();
+    confirmLatestAlert();
 
     expect(findButton(renderer.root, 'Restore')).toBeDefined();
     expect(findButton(renderer.root, 'Archive')).toBeUndefined();
@@ -150,7 +230,10 @@ describe('SpaceDetailsScreen', () => {
     await act(async () => {
       findButton(renderer.root, 'Restore')?.props.onPress();
     });
+    expect(restorePropertySpace.execute).not.toHaveBeenCalled();
+    confirmLatestAlert();
 
+    expect(restorePropertySpace.execute).toHaveBeenCalledWith({ id: 'space-1' });
     expect(findButton(renderer.root, 'Archive')).toBeDefined();
     expect(findButton(renderer.root, 'Restore')).toBeUndefined();
     expect(restorePropertySpace.execute).toHaveBeenCalledTimes(1);

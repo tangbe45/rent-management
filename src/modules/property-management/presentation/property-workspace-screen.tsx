@@ -3,15 +3,16 @@ import { useCallback, useState } from 'react';
 
 import { useTranslation } from '../../../shared/i18n';
 import { ArchiveBlockedByActiveRentalAgreementsError } from '../application/errors';
+import type { PropertyWorkspaceOverview } from '../application/get-property-workspace-overview';
 import type { Property } from '../domain/property';
-import type { PropertySpace } from '../domain/property-space';
 import {
   archiveProperty,
   archivePropertySpace,
   getProperty,
-  listPropertySpaces,
+  getPropertyWorkspaceOverview,
   restoreProperty,
 } from '../infrastructure/composition-root';
+import { confirmLifecycleAction } from './confirmation';
 import { PropertyMessage } from './property-ui';
 import { PropertyWorkspace } from './property-workspace';
 import { spaceErrorMessage } from './space-error-message';
@@ -22,8 +23,8 @@ export function PropertyWorkspaceScreen({ propertyId }: { propertyId: string }) 
   const [property, setProperty] = useState<Property | null>(() =>
     getProperty.execute({ id: propertyId }),
   );
-  const [spaces, setSpaces] = useState<readonly PropertySpace[]>(() =>
-    listPropertySpaces.execute({ propertyId }),
+  const [overview, setOverview] = useState<PropertyWorkspaceOverview>(() =>
+    getPropertyWorkspaceOverview.execute({ propertyId }),
   );
   const [expandedSpaceIds, setExpandedSpaceIds] = useState<ReadonlySet<string>>(() => new Set());
   const [error, setError] = useState<string | undefined>();
@@ -33,7 +34,7 @@ export function PropertyWorkspaceScreen({ propertyId }: { propertyId: string }) 
   // the workspace stayed mounted beneath a create/edit form.
   const reload = useCallback(() => {
     setProperty(getProperty.execute({ id: propertyId }));
-    setSpaces(listPropertySpaces.execute({ propertyId }));
+    setOverview(getPropertyWorkspaceOverview.execute({ propertyId }));
     const pending = consumePendingExpansions(propertyId);
     if (pending.length > 0) {
       setExpandedSpaceIds((current) => new Set([...current, ...pending]));
@@ -41,6 +42,15 @@ export function PropertyWorkspaceScreen({ propertyId }: { propertyId: string }) 
   }, [propertyId]);
 
   useFocusEffect(reload);
+
+  const confirm = (
+    options: { title: string; message: string; confirmLabel: string; destructive?: boolean },
+    action: () => void,
+  ) =>
+    confirmLifecycleAction(
+      { ...options, cancelLabel: t('common.cancel') },
+      action,
+    );
 
   if (property === null) {
     return (
@@ -65,43 +75,77 @@ export function PropertyWorkspaceScreen({ propertyId }: { propertyId: string }) 
   };
 
   const handleArchiveProperty = () => {
-    try {
-      archiveProperty.execute({ id: property.id });
-      setError(undefined);
-      router.back();
-    } catch (caught) {
-      setError(
-        caught instanceof ArchiveBlockedByActiveRentalAgreementsError
-          ? t('properties.error.archiveBlocked')
-          : t('properties.error.generic'),
-      );
-    }
+    confirm(
+      {
+        title: t('properties.confirm.archive.title'),
+        message: t('properties.confirm.archive.body'),
+        confirmLabel: t('properties.action.archive'),
+        destructive: true,
+      },
+      () => {
+        try {
+          archiveProperty.execute({ id: property.id });
+          setError(undefined);
+          router.back();
+        } catch (caught) {
+          setError(
+            caught instanceof ArchiveBlockedByActiveRentalAgreementsError
+              ? t('properties.error.archiveBlocked')
+              : t('properties.error.generic'),
+          );
+        }
+      },
+    );
   };
 
   const handleRestoreProperty = () => {
-    try {
-      restoreProperty.execute({ id: property.id });
-      setError(undefined);
-      reload();
-    } catch {
-      setError(t('properties.error.generic'));
-    }
+    confirm(
+      {
+        title: t('properties.confirm.restore.title'),
+        message: t('properties.confirm.restore.body'),
+        confirmLabel: t('properties.action.restore'),
+      },
+      () => {
+        try {
+          restoreProperty.execute({ id: property.id });
+          setError(undefined);
+          reload();
+        } catch {
+          setError(t('properties.error.generic'));
+        }
+      },
+    );
   };
 
   const handleArchiveSpace = (spaceId: string) => {
-    try {
-      archivePropertySpace.execute({ id: spaceId });
-      setError(undefined);
-      reload();
-    } catch (caught) {
-      setError(spaceErrorMessage(t, caught));
-    }
+    const hasChildren = overview.spaces.some((space) => space.parentSpaceId === spaceId);
+    confirm(
+      {
+        title: t('spaces.confirm.archive.title'),
+        message: hasChildren
+          ? t('spaces.confirm.archive.body')
+          : t('spaces.confirm.archive.bodyLeaf'),
+        confirmLabel: t('spaces.action.archive'),
+        destructive: true,
+      },
+      () => {
+        try {
+          archivePropertySpace.execute({ id: spaceId });
+          setError(undefined);
+          reload();
+        } catch (caught) {
+          setError(spaceErrorMessage(t, caught));
+        }
+      },
+    );
   };
 
   return (
     <PropertyWorkspace
       property={property}
-      spaces={spaces}
+      spaces={overview.spaces}
+      availability={overview.availability}
+      summary={overview.summary}
       expandedSpaceIds={expandedSpaceIds}
       error={error}
       onToggleSpace={toggleSpace}

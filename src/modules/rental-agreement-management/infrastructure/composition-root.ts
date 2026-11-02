@@ -15,6 +15,7 @@ import { DrizzleRentalAgreementRepository } from './drizzle-rental-agreement-rep
 import { DrizzleRentalAgreementUnitOfWork } from './drizzle-rental-agreement-unit-of-work';
 import { DrizzleSpaceLookup } from './drizzle-space-lookup';
 import { DrizzleTenantLookup } from './drizzle-tenant-lookup';
+import { AgreementSpaceOccupancyQuery } from './agreement-space-occupancy-query';
 import { resetAgreementInstallments } from '../../rent-payment-management/infrastructure/composition-root';
 
 const clock = new SystemClock();
@@ -25,6 +26,8 @@ const tenants = new DrizzleTenantLookup(database);
 const properties = new DrizzlePropertyLookup(database);
 const spaces = new DrizzleSpaceLookup(database);
 const unitOfWork = new DrizzleRentalAgreementUnitOfWork();
+
+export const agreementSpaceOccupancyQuery = new AgreementSpaceOccupancyQuery({ agreements });
 
 export const createRentalAgreement = new CreateRentalAgreement({ unitOfWork, clock, idGenerator });
 export const getRentalAgreement = new GetRentalAgreement({ agreements });

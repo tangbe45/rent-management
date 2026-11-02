@@ -7,6 +7,7 @@ import { CreateProperty } from '../application/create-property';
 import { CreatePropertySpace } from '../application/create-property-space';
 import { GetProperty } from '../application/get-property';
 import { GetPropertySpace } from '../application/get-property-space';
+import { GetPropertyWorkspaceOverview } from '../application/get-property-workspace-overview';
 import { ListArchivedProperties } from '../application/list-archived-properties';
 import { ListProperties } from '../application/list-properties';
 import { ListPropertySpaces } from '../application/list-property-spaces';
@@ -20,6 +21,7 @@ import { DrizzlePropertySpaceRepository } from './drizzle-property-space-reposit
 import {
   preventPropertyArchiveQuery,
   preventSpaceArchiveQuery,
+  agreementSpaceOccupancyQuery,
 } from '../../rental-agreement-management/infrastructure/composition-root';
 
 const clock = new SystemClock();
@@ -59,6 +61,12 @@ export const createPropertySpace = new CreatePropertySpace({
 export const getPropertySpace = new GetPropertySpace({ spaces: propertySpacesRepository });
 
 export const listPropertySpaces = new ListPropertySpaces({ spaces: propertySpacesRepository });
+
+export const getPropertyWorkspaceOverview = new GetPropertyWorkspaceOverview({
+  spaces: propertySpacesRepository,
+  occupancy: agreementSpaceOccupancyQuery,
+  clock,
+});
 
 export const updatePropertySpace = new UpdatePropertySpace({
   spaces: propertySpacesRepository,

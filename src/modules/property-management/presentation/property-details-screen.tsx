@@ -9,6 +9,7 @@ import {
   getProperty,
   restoreProperty,
 } from '../infrastructure/composition-root';
+import { confirmLifecycleAction } from './confirmation';
 import { PropertyDetails } from './property-details';
 import { PropertyMessage } from './property-ui';
 
@@ -63,13 +64,36 @@ export function PropertyDetailsScreen({ propertyId }: { propertyId: string }) {
     }
   };
 
+  const confirmArchive = () =>
+    confirmLifecycleAction(
+      {
+        title: t('properties.confirm.archive.title'),
+        message: t('properties.confirm.archive.body'),
+        confirmLabel: t('properties.action.archive'),
+        cancelLabel: t('common.cancel'),
+        destructive: true,
+      },
+      handleArchive,
+    );
+
+  const confirmRestore = () =>
+    confirmLifecycleAction(
+      {
+        title: t('properties.confirm.restore.title'),
+        message: t('properties.confirm.restore.body'),
+        confirmLabel: t('properties.action.restore'),
+        cancelLabel: t('common.cancel'),
+      },
+      handleRestore,
+    );
+
   return (
     <PropertyDetails
       property={property}
       error={error}
       onEdit={() => router.push(`/properties/${property.id}/edit`)}
-      onArchive={handleArchive}
-      onRestore={handleRestore}
+      onArchive={confirmArchive}
+      onRestore={confirmRestore}
       onBack={() => router.back()}
     />
   );

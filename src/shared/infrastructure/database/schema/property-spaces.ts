@@ -1,5 +1,15 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  check,
+  foreignKey,
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
+
+import { properties } from './properties';
 
 export const propertySpaces = sqliteTable(
   'property_spaces',
@@ -27,6 +37,33 @@ export const propertySpaces = sqliteTable(
     archivedAt: integer('archived_at'),
   },
   (table) => [
+    /**
+     * A space must belong to an existing property, and a referenced property
+     * can never be physically deleted while spaces still belong to it.
+     */
+    foreignKey({
+      columns: [table.propertyId],
+      foreignColumns: [properties.id],
+      name: 'property_spaces_property_id_fk',
+    }).onDelete('restrict'),
+    /**
+     * Composite self-reference: the parent space must exist in the same
+     * property. This keeps the cross-property invariant at the storage layer,
+     * in addition to application-level validation, and forbids cascading
+     * deletion of a parent that still has children.
+     */
+    foreignKey({
+      columns: [table.parentSpaceId, table.propertyId],
+      foreignColumns: [table.id, table.propertyId],
+      name: 'property_spaces_parent_space_fk',
+    }).onDelete('restrict'),
+    /** Parent key required by the composite self-reference above. */
+    uniqueIndex('property_spaces_id_property_id_unique').on(table.id, table.propertyId),
+    /** A space can never be its own parent. */
+    check(
+      'property_spaces_not_self_parent',
+      sql`${table.parentSpaceId} IS NULL OR ${table.parentSpaceId} <> ${table.id}`,
+    ),
     index('property_spaces_property_id_idx').on(table.propertyId),
     index('property_spaces_parent_space_id_idx').on(table.parentSpaceId),
     index('property_spaces_archived_at_idx').on(table.archivedAt),

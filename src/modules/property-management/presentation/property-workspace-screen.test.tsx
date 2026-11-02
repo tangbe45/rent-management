@@ -1,17 +1,27 @@
 import { router, useFocusEffect } from 'expo-router';
-import { Text } from 'react-native';
+import { Alert, Text } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
+import {
+  projectSpaceAvailability,
+  summarizeAvailability,
+} from '../application/property-space-availability';
 import { Property } from '../domain/property';
 import { PropertySpace, type PropertySpaceType } from '../domain/property-space';
 import {
   archiveProperty,
   archivePropertySpace,
   getProperty,
-  listPropertySpaces,
+  getPropertyWorkspaceOverview,
   restoreProperty,
 } from '../infrastructure/composition-root';
 import { PropertyWorkspaceScreen } from './property-workspace-screen';
+import {
+  cancelLatestAlert,
+  confirmLatestAlert,
+  installAlertSpy,
+  latestAlertMessage,
+} from './alert-confirmation.test-support';
 import { consumePendingExpansions, requestExpandOnNextWorkspaceFocus } from './workspace-expansion';
 
 jest.mock('expo-router', () => ({
@@ -24,7 +34,7 @@ jest.mock('../infrastructure/composition-root', () => ({
   archiveProperty: { execute: jest.fn() },
   archivePropertySpace: { execute: jest.fn() },
   getProperty: { execute: jest.fn() },
-  listPropertySpaces: { execute: jest.fn() },
+  getPropertyWorkspaceOverview: { execute: jest.fn() },
   restoreProperty: { execute: jest.fn() },
 }));
 
@@ -84,6 +94,14 @@ function emitFocus(): void {
   });
 }
 
+/**
+ * Presses the destructive button of the native confirmation dialog raised by
+ * the last lifecycle action. Confirmation is a real user step, so tests must go
+ * through it instead of calling the use case directly.
+ */
+const confirmAlert = confirmLatestAlert;
+const cancelAlert = cancelLatestAlert;
+
 describe('PropertyWorkspaceScreen', () => {
   let store: PropertySpace[];
 
@@ -93,10 +111,25 @@ describe('PropertyWorkspaceScreen', () => {
     jest
       .mocked(getProperty.execute)
       .mockReturnValue(buildProperty('property-1', 'Green Valley Estate'));
-    jest.mocked(listPropertySpaces.execute).mockImplementation(() => [...store]);
+    jest.mocked(getPropertyWorkspaceOverview.execute).mockImplementation(() => {
+      const spaces = [...store];
+      const availability = projectSpaceAvailability(spaces, []);
+      return { spaces, availability, summary: summarizeAvailability(spaces, availability) };
+    });
+    jest.mocked(archivePropertySpace.execute).mockImplementation(({ id }) => {
+      const target = store.find((space) => space.id === id);
+      if (target === undefined) {
+        throw new Error(`Unknown space: ${id}`);
+      }
+      const archived = target.archive(3000);
+      store = store.map((space) => (space.id === id ? archived : space));
+      return archived;
+    });
+    installAlertSpy();
   });
 
   afterEach(() => {
+    jest.restoreAllMocks();
     consumePendingExpansions('property-1');
   });
 
@@ -139,7 +172,7 @@ describe('PropertyWorkspaceScreen', () => {
     expect(textShown(renderer.root, 'Main Building')).toBe(false);
   });
 
-  it('archives the property through the use case and returns to the list', async () => {
+  it('asks for confirmation before archiving the property and returns to the list', async () => {
     const renderer = await renderScreen();
 
     await act(async () => {
@@ -149,11 +182,31 @@ describe('PropertyWorkspaceScreen', () => {
       findButton(renderer.root, 'Archive')?.onPress();
     });
 
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    expect(archiveProperty.execute).not.toHaveBeenCalled();
+
+    confirmAlert();
+
     expect(archiveProperty.execute).toHaveBeenCalledWith({ id: 'property-1' });
     expect(router.back).toHaveBeenCalledTimes(1);
   });
 
-  it('archives a space and updates the active tree immediately', async () => {
+  it('does nothing when the property archive confirmation is cancelled', async () => {
+    const renderer = await renderScreen();
+
+    await act(async () => {
+      findButton(renderer.root, 'Property actions')?.onPress();
+    });
+    await act(async () => {
+      findButton(renderer.root, 'Archive')?.onPress();
+    });
+    cancelAlert();
+
+    expect(archiveProperty.execute).not.toHaveBeenCalled();
+    expect(router.back).not.toHaveBeenCalled();
+  });
+
+  it('archives a space after confirmation and updates the active tree immediately', async () => {
     store.push(space('building', 'Main Building', 'BUILDING'));
     store.push(space('room-1', 'Room 1', 'ROOM', { parentSpaceId: 'building' }));
 
@@ -167,17 +220,36 @@ describe('PropertyWorkspaceScreen', () => {
       findButton(renderer.root, 'Space actions Room 1')?.onPress();
     });
 
-    store = [store[0]!, space('room-1', 'Room 1', 'ROOM', { parentSpaceId: 'building', archivedAt: 3000 })];
-
     await act(async () => {
       findButton(renderer.root, 'Archive')?.onPress();
     });
+
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    expect(archivePropertySpace.execute).not.toHaveBeenCalled();
+
+    confirmAlert();
 
     expect(archivePropertySpace.execute).toHaveBeenCalledWith({ id: 'room-1' });
     expect(textShown(renderer.root, 'Room 1')).toBe(false);
   });
 
-  it('restores an archived property in place', async () => {
+  it('warns that descendants are suspended when archiving a parent space', async () => {
+    store.push(space('building', 'Main Building', 'BUILDING'));
+    store.push(space('room-1', 'Room 1', 'ROOM', { parentSpaceId: 'building' }));
+
+    const renderer = await renderScreen();
+
+    await act(async () => {
+      findButton(renderer.root, 'Space actions Main Building')?.onPress();
+    });
+    await act(async () => {
+      findButton(renderer.root, 'Archive')?.onPress();
+    });
+
+    expect(latestAlertMessage()).toContain('suspend active descendants');
+  });
+
+  it('restores an archived property in place after confirmation', async () => {
     jest
       .mocked(getProperty.execute)
       .mockReturnValue(buildProperty('property-1', 'Green Valley Estate', 2000));
@@ -189,6 +261,9 @@ describe('PropertyWorkspaceScreen', () => {
     await act(async () => {
       findButton(renderer.root, 'Restore')?.onPress();
     });
+
+    expect(restoreProperty.execute).not.toHaveBeenCalled();
+    confirmAlert();
 
     expect(restoreProperty.execute).toHaveBeenCalledWith({ id: 'property-1' });
   });

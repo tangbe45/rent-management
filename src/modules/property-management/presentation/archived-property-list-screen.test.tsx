@@ -5,6 +5,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { Property } from '../domain/property';
 import { listArchivedProperties, restoreProperty } from '../infrastructure/composition-root';
 import { ArchivedPropertyListScreen } from './archived-property-list-screen';
+import { confirmLatestAlert, installAlertSpy } from './alert-confirmation.test-support';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn() },
@@ -60,6 +61,11 @@ describe('ArchivedPropertyListScreen', () => {
     jest.clearAllMocks();
     store = [];
     jest.mocked(listArchivedProperties.execute).mockImplementation(() => [...store]);
+    installAlertSpy();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('shows a property archived elsewhere when the screen regains focus', async () => {
@@ -87,6 +93,8 @@ describe('ArchivedPropertyListScreen', () => {
     await act(async () => {
       findButton(renderer.root, 'Restore')?.props.onPress();
     });
+    expect(restoreProperty.execute).not.toHaveBeenCalled();
+    confirmLatestAlert();
 
     expect(textShown(renderer.root, 'Green Valley Estate')).toBe(false);
     expect(restoreProperty.execute).toHaveBeenCalledWith({ id: 'property-1' });
