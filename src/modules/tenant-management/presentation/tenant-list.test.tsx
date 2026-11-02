@@ -7,7 +7,14 @@ import { TenantList } from './tenant-list';
 
 jest.setTimeout(30_000);
 
+const mounted: ReactTestRenderer[] = [];
+
 afterEach(() => {
+  for (const renderer of mounted.splice(0)) {
+    act(() => {
+      renderer.unmount();
+    });
+  }
   setLocale('en');
 });
 
@@ -51,6 +58,8 @@ async function renderList(
   overrides: {
     tenants?: readonly Tenant[];
     total?: number;
+    loaded?: boolean;
+    error?: string;
     onOpen?: jest.Mock;
     onCreate?: jest.Mock;
     onOpenArchived?: jest.Mock;
@@ -58,25 +67,29 @@ async function renderList(
     onLoadMore?: jest.Mock;
   } = {},
 ) {
+  const { tenants = [], total, loaded = true, error, ...handlerOverrides } = overrides;
   const handlers = {
     onOpen: jest.fn(),
     onCreate: jest.fn(),
     onOpenArchived: jest.fn(),
     onSearchChange: jest.fn(),
     onLoadMore: jest.fn(),
-    ...overrides,
+    ...handlerOverrides,
   };
   let renderer!: ReactTestRenderer;
   await act(async () => {
     renderer = create(
       <TenantList
-        tenants={overrides.tenants ?? []}
-        total={overrides.total ?? (overrides.tenants?.length ?? 0)}
+        tenants={tenants}
+        total={total ?? tenants.length}
+        loaded={loaded}
         search=""
+        error={error}
         {...handlers}
       />,
     );
   });
+  mounted.push(renderer);
   return { root: renderer.root, handlers };
 }
 
@@ -103,6 +116,33 @@ describe('TenantList', () => {
     const { root } = await renderList();
 
     expect(textShown(root, 'No tenants yet.')).toBe(true);
+  });
+
+  it('shows no empty message before the first load completes', async () => {
+    const { root } = await renderList({ loaded: false });
+
+    expect(textShown(root, 'No tenants yet.')).toBe(false);
+  });
+
+  it('shows the error instead of an empty message when loading fails', async () => {
+    const { root } = await renderList({
+      loaded: false,
+      error: 'Something went wrong. Please try again.',
+    });
+
+    expect(textShown(root, 'Something went wrong. Please try again.')).toBe(true);
+    expect(textShown(root, 'No tenants yet.')).toBe(false);
+  });
+
+  it('shows the error without hiding the current rows', async () => {
+    const { root } = await renderList({
+      tenants: [buildTenant('tenant-1', 'Amina Njeri')],
+      error: 'Something went wrong. Please try again.',
+    });
+
+    expect(textShown(root, 'Something went wrong. Please try again.')).toBe(true);
+    expect(textShown(root, 'Amina Njeri')).toBe(true);
+    expect(textShown(root, 'No tenants yet.')).toBe(false);
   });
 
   it('reports search input changes', async () => {

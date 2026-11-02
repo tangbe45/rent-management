@@ -15,7 +15,10 @@ import { SecondaryButton, TextLink } from './tenant-ui';
 interface TenantListProps {
   tenants: readonly Tenant[];
   total: number;
+  /** True once the first read has completed, so no empty state flashes before it. */
+  loaded: boolean;
   search: string;
+  error?: string;
   onSearchChange: (value: string) => void;
   onLoadMore: () => void;
   onOpen: (id: string) => void;
@@ -26,7 +29,9 @@ interface TenantListProps {
 export function TenantList({
   tenants,
   total,
+  loaded,
   search,
+  error,
   onSearchChange,
   onLoadMore,
   onCreate,
@@ -34,6 +39,12 @@ export function TenantList({
   onOpenArchived,
 }: TenantListProps) {
   const { t } = useTranslation();
+  /**
+   * A failed first read must show only the error: rendering "No tenants yet."
+   * next to it would wrongly imply the list is empty.
+   */
+  const emptyMessage =
+    tenants.length > 0 || !loaded || error ? null : t('tenants.list.empty');
 
   return (
     <KeyboardSafeContainer>
@@ -47,9 +58,9 @@ export function TenantList({
         style={styles.input}
       />
 
-      {tenants.length === 0 ? (
-        <Text style={styles.subtitle}>{t('tenants.list.empty')}</Text>
-      ) : (
+      {error ? <Text style={styles.fieldError}>{error}</Text> : null}
+
+      {tenants.length > 0 ? (
         tenants.map((tenant) => (
           <Pressable
             key={tenant.id}
@@ -67,7 +78,9 @@ export function TenantList({
             </Card>
           </Pressable>
         ))
-      )}
+      ) : emptyMessage !== null ? (
+        <Text style={styles.subtitle}>{emptyMessage}</Text>
+      ) : null}
 
       {tenants.length < total ? (
         <SecondaryButton title={t('tenants.list.loadMore')} onPress={onLoadMore} />
