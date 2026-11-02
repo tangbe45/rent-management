@@ -247,7 +247,7 @@ export const fr: Record<TranslationKey, string> = {
   'tenants.badge.archived': 'Archivé',
 
   'tenants.error.archiveBlocked':
-    'Ce locataire ne peut pas être archivé car il a des contrats de location actifs.',
+    'Ce locataire ne peut pas être archivé car il a des contrats de location en cours ou à venir.',
   'tenants.error.generic': 'Une erreur est survenue. Veuillez réessayer.',
 
   'tenants.confirm.archive.title': 'Archiver le locataire',

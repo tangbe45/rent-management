@@ -119,7 +119,7 @@ describe('TenantDetailsScreen', () => {
     expect(findButton(renderer.root, 'Archive')).toBeDefined();
   });
 
-  it('reports when archiving is blocked by an active rental agreement', async () => {
+  it('reports when archiving is blocked by an active or upcoming rental agreement', async () => {
     store = Tenant.create({ id: 'tenant-1', fullName: 'Amina Njeri', createdAt: 1 });
     jest.mocked(archiveTenant.execute).mockImplementation(() => {
       throw new ArchiveBlockedByActiveTenantRentalAgreementsError('tenant-1');
@@ -132,7 +132,10 @@ describe('TenantDetailsScreen', () => {
     confirmLatestAlert();
 
     expect(
-      textShown(renderer.root, 'This tenant cannot be archived because they have active rental agreements.'),
+      textShown(
+        renderer.root,
+        'This tenant cannot be archived because they have active or upcoming rental agreements.',
+      ),
     ).toBe(true);
   });
 

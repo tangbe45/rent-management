@@ -29,6 +29,24 @@ describe('translate', () => {
   });
 });
 
+describe('tenant archive-blocked message', () => {
+  it('tells English users that active or upcoming agreements block archiving', () => {
+    const message = translate('en', 'tenants.error.archiveBlocked');
+
+    expect(message).toContain('active');
+    expect(message).toContain('upcoming');
+    expect(message).toContain('rental agreements');
+  });
+
+  it('tells French users that current or future agreements block archiving', () => {
+    const message = translate('fr', 'tenants.error.archiveBlocked');
+
+    expect(message).toContain('en cours');
+    expect(message).toContain('à venir');
+    expect(message).toContain('contrats de location');
+  });
+});
+
 describe('active locale', () => {
   it('defaults to a valid locale and switches with setLocale', () => {
     expect(['en', 'fr']).toContain(getLocale());

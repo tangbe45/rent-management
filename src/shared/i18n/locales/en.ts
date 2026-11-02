@@ -245,7 +245,7 @@ export const en = {
   'tenants.badge.archived': 'Archived',
 
   'tenants.error.archiveBlocked':
-    'This tenant cannot be archived because they have active rental agreements.',
+    'This tenant cannot be archived because they have active or upcoming rental agreements.',
   'tenants.error.generic': 'Something went wrong. Please try again.',
 
   'tenants.confirm.archive.title': 'Archive tenant',

@@ -159,11 +159,17 @@ describe('TenantDetails', () => {
   it('renders an error message when provided', async () => {
     const { root } = await renderDetails(
       Tenant.create({ id: 'tenant-1', fullName: 'Amina Njeri', createdAt: 1 }),
-      { error: 'This tenant cannot be archived because they have active rental agreements.' },
+      {
+        error:
+          'This tenant cannot be archived because they have active or upcoming rental agreements.',
+      },
     );
 
     expect(
-      textShown(root, 'This tenant cannot be archived because they have active rental agreements.'),
+      textShown(
+        root,
+        'This tenant cannot be archived because they have active or upcoming rental agreements.',
+      ),
     ).toBe(true);
   });
 
