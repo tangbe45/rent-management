@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Alert, Text } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -42,12 +42,28 @@ function textShown(root: ReactTestInstance, message: string): boolean {
     .some((instance) => instance.props.children === message);
 }
 
-async function renderScreen(tenantId = 'tenant-1'): Promise<ReactTestRenderer> {
+async function renderScreen(
+  tenantId = 'tenant-1',
+  { focus = true }: { focus?: boolean } = {},
+): Promise<ReactTestRenderer> {
   let renderer!: ReactTestRenderer;
   await act(async () => {
     renderer = create(<TenantDetailsScreen tenantId={tenantId} />);
   });
+  if (focus) {
+    emitFocus();
+  }
   return renderer;
+}
+
+/** Runs the callback the screen registered with `useFocusEffect`, like a focus event. */
+function emitFocus(): void {
+  const calls = jest.mocked(useFocusEffect).mock.calls;
+  expect(calls.length).toBeGreaterThan(0);
+  const callback = calls[calls.length - 1]![0];
+  act(() => {
+    callback();
+  });
 }
 
 describe('TenantDetailsScreen', () => {
@@ -76,6 +92,73 @@ describe('TenantDetailsScreen', () => {
     const renderer = await renderScreen('missing');
 
     expect(textShown(renderer.root, 'Tenant not found.')).toBe(true);
+  });
+
+  it('does not read during render and loads once when the screen gains focus', async () => {
+    store = Tenant.create({ id: 'tenant-1', fullName: 'Amina Njeri', createdAt: 1 });
+
+    const renderer = await renderScreen('tenant-1', { focus: false });
+
+    expect(getTenant.execute).not.toHaveBeenCalled();
+    expect(textShown(renderer.root, 'Amina Njeri')).toBe(false);
+    expect(textShown(renderer.root, 'Tenant not found.')).toBe(false);
+
+    emitFocus();
+
+    expect(getTenant.execute).toHaveBeenCalledTimes(1);
+    expect(getTenant.execute).toHaveBeenCalledWith({ id: 'tenant-1' });
+    expect(textShown(renderer.root, 'Amina Njeri')).toBe(true);
+  });
+
+  it('handles a failed first read instead of letting it escape the screen', async () => {
+    jest.mocked(getTenant.execute).mockImplementation(() => {
+      throw new Error('read failed');
+    });
+
+    const renderer = await renderScreen();
+
+    expect(textShown(renderer.root, 'Something went wrong. Please try again.')).toBe(true);
+    expect(textShown(renderer.root, 'Tenant not found.')).toBe(false);
+    expect(findButton(renderer.root, 'Back')).toBeDefined();
+  });
+
+  it('keeps the loaded tenant and reports the error when a focus reload fails', async () => {
+    store = Tenant.create({ id: 'tenant-1', fullName: 'Amina Njeri', createdAt: 1 });
+
+    const renderer = await renderScreen();
+    expect(textShown(renderer.root, 'Amina Njeri')).toBe(true);
+
+    jest.mocked(getTenant.execute).mockImplementation(() => {
+      throw new Error('reload failed');
+    });
+    emitFocus();
+
+    expect(textShown(renderer.root, 'Something went wrong. Please try again.')).toBe(true);
+    expect(textShown(renderer.root, 'Amina Njeri')).toBe(true);
+    expect(textShown(renderer.root, 'Tenant not found.')).toBe(false);
+  });
+
+  it('recovers after a failed read when the screen regains focus', async () => {
+    store = Tenant.create({ id: 'tenant-1', fullName: 'Amina Njeri', createdAt: 1 });
+    const execute = jest.mocked(getTenant.execute);
+    const working = execute.getMockImplementation()!;
+    let failed = false;
+    execute.mockImplementation((input: { id: string }) => {
+      if (!failed) {
+        failed = true;
+        throw new Error('read failed');
+      }
+      return working(input);
+    });
+
+    const renderer = await renderScreen();
+    expect(textShown(renderer.root, 'Something went wrong. Please try again.')).toBe(true);
+
+    emitFocus();
+
+    expect(textShown(renderer.root, 'Something went wrong. Please try again.')).toBe(false);
+    expect(textShown(renderer.root, 'Amina Njeri')).toBe(true);
+    expect(textShown(renderer.root, 'Tenant not found.')).toBe(false);
   });
 
   it('asks for confirmation before archiving the tenant', async () => {

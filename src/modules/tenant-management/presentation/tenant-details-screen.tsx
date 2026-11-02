@@ -15,21 +15,42 @@ interface TenantDetailsScreenProps {
 
 export function TenantDetailsScreen({ tenantId }: TenantDetailsScreenProps) {
   const { t } = useTranslation();
-  const [tenant, setTenant] = useState<Tenant | null>(() =>
-    getTenant.execute({ id: tenantId }),
-  );
+  /**
+   * The first read happens in the guarded reload below, never during render or
+   * state initialization: a throw there would escape before the screen mounts
+   * and leave the user without the localized error or a retry path.
+   */
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
   const reload = useCallback(() => {
-    setTenant(getTenant.execute({ id: tenantId }));
-  }, [tenantId]);
+    try {
+      setTenant(getTenant.execute({ id: tenantId }));
+      // A successful read also clears a previous read failure, so regaining
+      // focus is a retry path.
+      setError(undefined);
+    } catch {
+      // A failed reload keeps the tenant already on screen and reports the
+      // error next to it rather than pretending the record no longer exists.
+      setError(t('tenants.error.generic'));
+    } finally {
+      // Read failures are surfaced as their own state, never left loading.
+      setLoaded(true);
+    }
+  }, [tenantId, t]);
 
   useFocusEffect(reload);
 
   if (tenant === null) {
+    if (!loaded) {
+      return null;
+    }
     return (
       <TenantMessage
-        title={t('tenants.details.notFound')}
+        // `GetTenant` returns null for a missing id without throwing, so a null
+        // tenant with an error is a failed read, not a missing record.
+        title={error ?? t('tenants.details.notFound')}
         actionLabel={t('common.back')}
         onAction={() => router.back()}
       />
