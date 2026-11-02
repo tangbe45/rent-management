@@ -59,6 +59,7 @@ async function renderList(
     tenants?: readonly Tenant[];
     total?: number;
     loaded?: boolean;
+    search?: string;
     error?: string;
     onOpen?: jest.Mock;
     onCreate?: jest.Mock;
@@ -67,7 +68,7 @@ async function renderList(
     onLoadMore?: jest.Mock;
   } = {},
 ) {
-  const { tenants = [], total, loaded = true, error, ...handlerOverrides } = overrides;
+  const { tenants = [], total, loaded = true, search = '', error, ...handlerOverrides } = overrides;
   const handlers = {
     onOpen: jest.fn(),
     onCreate: jest.fn(),
@@ -83,7 +84,7 @@ async function renderList(
         tenants={tenants}
         total={total ?? tenants.length}
         loaded={loaded}
-        search=""
+        search={search}
         error={error}
         {...handlers}
       />,
@@ -116,6 +117,57 @@ describe('TenantList', () => {
     const { root } = await renderList();
 
     expect(textShown(root, 'No tenants yet.')).toBe(true);
+    expect(textShown(root, 'No tenants match your search.')).toBe(false);
+  });
+
+  it('keeps the empty-directory message when no search is active', async () => {
+    const { root } = await renderList({ search: '   ' });
+
+    // A blank search is normalized away by the query layer, so it is not an
+    // active search: the directory really is empty.
+    expect(textShown(root, 'No tenants yet.')).toBe(true);
+    expect(textShown(root, 'No tenants match your search.')).toBe(false);
+  });
+
+  it('shows the no-results message when a search matches no tenants', async () => {
+    const { root } = await renderList({ search: 'zzz' });
+
+    expect(textShown(root, 'No tenants match your search.')).toBe(true);
+    expect(textShown(root, 'No tenants yet.')).toBe(false);
+  });
+
+  it('shows the matching tenants for an active search', async () => {
+    const { root } = await renderList({
+      tenants: [buildTenant('tenant-1', 'Amina Njeri')],
+      search: 'amina',
+    });
+
+    expect(textShown(root, 'Amina Njeri')).toBe(true);
+    expect(textShown(root, 'No tenants match your search.')).toBe(false);
+    expect(textShown(root, 'No tenants yet.')).toBe(false);
+  });
+
+  it('shows the error instead of either empty state when a search fails', async () => {
+    const { root } = await renderList({
+      search: 'boom',
+      error: 'Something went wrong. Please try again.',
+    });
+
+    expect(textShown(root, 'Something went wrong. Please try again.')).toBe(true);
+    expect(textShown(root, 'No tenants match your search.')).toBe(false);
+    expect(textShown(root, 'No tenants yet.')).toBe(false);
+  });
+
+  it('shows no empty state at all when a search fails before the first load', async () => {
+    const { root } = await renderList({
+      loaded: false,
+      search: 'boom',
+      error: 'Something went wrong. Please try again.',
+    });
+
+    expect(textShown(root, 'Something went wrong. Please try again.')).toBe(true);
+    expect(textShown(root, 'No tenants match your search.')).toBe(false);
+    expect(textShown(root, 'No tenants yet.')).toBe(false);
   });
 
   it('shows no empty message before the first load completes', async () => {
@@ -192,5 +244,13 @@ describe('TenantList', () => {
     expect(textShown(root, 'Aucun locataire pour le moment.')).toBe(true);
     expect(textShown(root, 'Ajouter un locataire')).toBe(true);
     expect(textShown(root, 'Locataires archivés')).toBe(true);
+  });
+
+  it('renders the French no-results label when a search matches nothing', async () => {
+    setLocale('fr');
+    const { root } = await renderList({ search: 'zzz' });
+
+    expect(textShown(root, 'Aucun locataire ne correspond à votre recherche.')).toBe(true);
+    expect(textShown(root, 'Aucun locataire pour le moment.')).toBe(false);
   });
 });

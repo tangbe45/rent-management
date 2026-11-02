@@ -208,6 +208,7 @@ export const fr: Record<TranslationKey, string> = {
 
   'tenants.list.title': 'Locataires',
   'tenants.list.empty': 'Aucun locataire pour le moment.',
+  'tenants.list.noResults': 'Aucun locataire ne correspond à votre recherche.',
   'tenants.list.add': 'Ajouter un locataire',
   'tenants.list.openArchived': 'Locataires archivés',
   'tenants.list.search': 'Rechercher des locataires',

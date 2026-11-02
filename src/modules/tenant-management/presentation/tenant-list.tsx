@@ -41,10 +41,16 @@ export function TenantList({
   const { t } = useTranslation();
   /**
    * A failed first read must show only the error: rendering "No tenants yet."
-   * next to it would wrongly imply the list is empty.
+   * next to it would wrongly imply the list is empty. An active search that
+   * matched nothing is likewise not an empty directory, so the search term
+   * (not the page contents) decides which empty state applies.
    */
   const emptyMessage =
-    tenants.length > 0 || !loaded || error ? null : t('tenants.list.empty');
+    tenants.length > 0 || !loaded || error
+      ? null
+      : search.trim() !== ''
+        ? t('tenants.list.noResults')
+        : t('tenants.list.empty');
 
   return (
     <KeyboardSafeContainer>

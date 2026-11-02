@@ -122,6 +122,24 @@ describe('TenantListScreen', () => {
     expect(textShown(renderer.root, 'Amina Njeri')).toBe(false);
   });
 
+  it('shows the no-results message for a search with no matches', async () => {
+    store.push(buildTenant('tenant-1', 'Amina Njeri'));
+    store.push(buildTenant('tenant-2', 'Brian Otieno', 2));
+
+    const renderer = await renderScreen();
+    expect(textShown(renderer.root, 'No tenants yet.')).toBe(false);
+
+    await changeSearch(renderer, 'zzz');
+
+    expect(textShown(renderer.root, 'No tenants match your search.')).toBe(true);
+    expect(textShown(renderer.root, 'No tenants yet.')).toBe(false);
+
+    await changeSearch(renderer, '');
+
+    expect(textShown(renderer.root, 'Amina Njeri')).toBe(true);
+    expect(textShown(renderer.root, 'No tenants match your search.')).toBe(false);
+  });
+
   it('appends the next page when load more is pressed', async () => {
     store.push(buildTenant('tenant-1', 'Amina Njeri'));
     store.push(buildTenant('tenant-2', 'Brian Otieno', 2));
@@ -227,6 +245,7 @@ describe('TenantListScreen', () => {
     expect(textShown(renderer.root, 'Something went wrong. Please try again.')).toBe(true);
     expect(textShown(renderer.root, 'Amina Njeri')).toBe(true);
     expect(textShown(renderer.root, 'No tenants yet.')).toBe(false);
+    expect(textShown(renderer.root, 'No tenants match your search.')).toBe(false);
     expect(execute).toHaveBeenLastCalledWith({ search: 'boom' });
   });
 

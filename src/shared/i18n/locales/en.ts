@@ -206,6 +206,7 @@ export const en = {
 
   'tenants.list.title': 'Tenants',
   'tenants.list.empty': 'No tenants yet.',
+  'tenants.list.noResults': 'No tenants match your search.',
   'tenants.list.add': 'Add tenant',
   'tenants.list.openArchived': 'Archived tenants',
   'tenants.list.search': 'Search tenants',
