@@ -689,6 +689,7 @@ Future list slices should follow this contract unless a genuine need justifies a
 
 - Routes in `src/app/tenants/`: `index` (active list), `new` (create), `archived` (archived list), `[tenantId]/index` (details) and `[tenantId]/edit` (edit). Each guards itself with `resolveProtectedRoute` + `authenticationSession.isAuthenticated()`; the `ApplicationRoute` union in `routing.ts` was extended accordingly. Creating a tenant navigates straight to its details (`router.replace('/tenants/${id}')`).
 - The dashboard gained a "Manage tenants" entry point. All user-facing text is translated (English/French) through `src/shared/i18n`, and tenant presentation reuses the setup UI primitives from the account module like the other slices.
+- Tenant archive and restore ask for confirmation first through the existing `confirmLifecycleAction` helper (native `Alert.alert`, imported from Property presentation rather than duplicated); archive is destructive and states that the tenant and their rental history are preserved, restore is non-destructive. The "New rental agreement" action is hidden on an archived tenant's details; existing tenant information and the rent/history entry point remain available. Rental Agreement business validation is unchanged.
 
 ---
 

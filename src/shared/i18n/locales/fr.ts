@@ -250,6 +250,12 @@ export const fr: Record<TranslationKey, string> = {
     'Ce locataire ne peut pas être archivé car il a des contrats de location actifs.',
   'tenants.error.generic': 'Une erreur est survenue. Veuillez réessayer.',
 
+  'tenants.confirm.archive.title': 'Archiver le locataire',
+  'tenants.confirm.archive.body':
+    'Archiver ce locataire le retirera de la liste active. Le locataire, ses contrats de location, ses paiements, ses reçus et son historique ne sont pas supprimés.',
+  'tenants.confirm.restore.title': 'Restaurer le locataire',
+  'tenants.confirm.restore.body': 'Restaurer ce locataire dans la liste active ?',
+
   'tenants.action.createAgreement': 'Nouveau contrat de location',
 
   'spaces.action.createAgreement': 'Nouveau contrat de location',

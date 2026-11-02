@@ -91,10 +91,12 @@ export function TenantDetails({
         {onOpenRent ? (
           <SecondaryButton title={t('rent.tenant.title')} onPress={onOpenRent} />
         ) : null}
-        <SecondaryButton
-          title={t('tenants.action.createAgreement')}
-          onPress={onCreateAgreement}
-        />
+        {!tenant.isArchived ? (
+          <SecondaryButton
+            title={t('tenants.action.createAgreement')}
+            onPress={onCreateAgreement}
+          />
+        ) : null}
         {tenant.isArchived ? (
           <SecondaryButton title={t('tenants.action.restore')} onPress={onRestore} />
         ) : (

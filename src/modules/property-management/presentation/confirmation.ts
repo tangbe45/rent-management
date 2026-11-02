@@ -9,9 +9,10 @@ export interface LifecycleConfirmation {
 }
 
 /**
- * Native confirmation dialog shared by the property and space archive/restore
- * entry points. Confirming only runs the action: the application-level use case
- * still validates and may reject the operation afterwards.
+ * Native confirmation dialog shared by the property, space and tenant
+ * archive/restore entry points. Confirming only runs the action: the
+ * application-level use case still validates and may reject the operation
+ * afterwards.
  */
 export function confirmLifecycleAction(
   confirmation: LifecycleConfirmation,

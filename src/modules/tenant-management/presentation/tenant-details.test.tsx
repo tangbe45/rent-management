@@ -39,6 +39,7 @@ async function renderDetails(
 ) {
   const onEdit = jest.fn();
   const onCreateAgreement = jest.fn();
+  const onOpenRent = jest.fn();
   const onArchive = jest.fn();
   const onRestore = jest.fn();
   const onBack = jest.fn();
@@ -50,13 +51,22 @@ async function renderDetails(
         error={overrides.error}
         onEdit={onEdit}
         onCreateAgreement={onCreateAgreement}
+        onOpenRent={onOpenRent}
         onArchive={onArchive}
         onRestore={onRestore}
         onBack={onBack}
       />,
     );
   });
-  return { root: renderer.root, onEdit, onCreateAgreement, onArchive, onRestore, onBack };
+  return {
+    root: renderer.root,
+    onEdit,
+    onCreateAgreement,
+    onOpenRent,
+    onArchive,
+    onRestore,
+    onBack,
+  };
 }
 
 describe('TenantDetails', () => {
@@ -101,6 +111,33 @@ describe('TenantDetails', () => {
     expect(onCreateAgreement).toHaveBeenCalledTimes(1);
     expect(onArchive).toHaveBeenCalledTimes(1);
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the New rental agreement action for an archived tenant', async () => {
+    const archived = Tenant.create({ id: 'tenant-1', fullName: 'Amina Njeri', createdAt: 1 }).archive(
+      2,
+    );
+    const { root } = await renderDetails(archived);
+
+    expect(textShown(root, 'Archived')).toBe(true);
+    expect(countButton(root, 'New rental agreement')).toBe(0);
+    expect(countButton(root, 'Restore')).toBeGreaterThanOrEqual(1);
+    expect(countButton(root, 'Archive')).toBe(0);
+  });
+
+  it('keeps historical agreement access for an archived tenant', async () => {
+    const archived = Tenant.create({ id: 'tenant-1', fullName: 'Amina Njeri', createdAt: 1 }).archive(
+      2,
+    );
+    const { root, onOpenRent } = await renderDetails(archived);
+
+    expect(textShown(root, 'Amina Njeri')).toBe(true);
+    expect(countButton(root, 'Rent for tenant')).toBeGreaterThanOrEqual(1);
+
+    await act(async () => {
+      findButton(root, 'Rent for tenant').onPress();
+    });
+    expect(onOpenRent).toHaveBeenCalledTimes(1);
   });
 
   it('shows the archived badge and offers restore for an archived tenant', async () => {

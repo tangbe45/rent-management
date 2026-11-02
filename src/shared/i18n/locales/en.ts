@@ -248,6 +248,12 @@ export const en = {
     'This tenant cannot be archived because they have active rental agreements.',
   'tenants.error.generic': 'Something went wrong. Please try again.',
 
+  'tenants.confirm.archive.title': 'Archive tenant',
+  'tenants.confirm.archive.body':
+    'Archiving this tenant will hide them from the active tenant list. The tenant, their rental agreements, payments, receipts and history are not deleted.',
+  'tenants.confirm.restore.title': 'Restore tenant',
+  'tenants.confirm.restore.body': 'Restore this tenant to the active tenant list?',
+
   'tenants.action.createAgreement': 'New rental agreement',
 
   'spaces.action.createAgreement': 'New rental agreement',
