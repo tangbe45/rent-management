@@ -1,4 +1,4 @@
-import { and, count, eq, isNotNull, isNull, like, or, type SQL } from 'drizzle-orm';
+import { and, count, eq, isNotNull, isNull, or, sql, type AnyColumn, type SQL } from 'drizzle-orm';
 
 import type { Database } from '../../../shared/infrastructure/database/connection';
 import { tenants } from '../../../shared/infrastructure/database/schema/tenants';
@@ -8,6 +8,47 @@ import type {
   TenantRepository,
   TenantSearchCriteria,
 } from '../domain/tenant-repository';
+
+const LIKE_ESCAPE_CHARACTER = '\\';
+
+/**
+ * Escapes the characters SQLite's `LIKE` treats as special so a user's search
+ * term matches literally: `\` becomes `\\`, `%` becomes `\%` and `_` becomes
+ * `\_`. One pass over the original characters avoids the double-escaping a
+ * chain of `replace` calls would introduce (`\` → `\\` → `\\\\`).
+ */
+export function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `${LIKE_ESCAPE_CHARACTER}${character}`);
+}
+
+/**
+ * SQLite applies `ESCAPE` to a single `LIKE` expression, so each column needs
+ * its own clause. Wrapping an `OR` of several `LIKE`s in one `ESCAPE` would be
+ * invalid SQL, hence this per-column helper.
+ */
+function likeLiteral(column: AnyColumn, pattern: string): SQL {
+  return sql`${column} like ${pattern} escape '\\'`;
+}
+
+/**
+ * Builds the literal substring predicate used by tenant search over full name,
+ * phone, second phone and email. Returns `undefined` for an empty term, which
+ * lets callers skip the condition entirely. The value is always bound as a
+ * parameter; only the fixed `ESCAPE` character appears in the SQL source.
+ */
+export function tenantSearchCondition(search: string): SQL | undefined {
+  const escaped = escapeLikePattern(search.toLowerCase());
+  if (escaped.length === 0) {
+    return undefined;
+  }
+  const pattern = `%${escaped}%`;
+  return or(
+    likeLiteral(tenants.fullName, pattern),
+    likeLiteral(tenants.phone, pattern),
+    likeLiteral(tenants.secondPhoneNumber, pattern),
+    likeLiteral(tenants.email, pattern),
+  );
+}
 
 /**
  * Structural shape of a persisted tenant row. Declaring it explicitly keeps the
@@ -96,18 +137,9 @@ export class DrizzleTenantRepository implements TenantRepository {
 
   private query(lifecycle: SQL, criteria: TenantSearchCriteria): TenantPage {
     const conditions: SQL[] = [lifecycle];
-    const search = criteria.search.toLowerCase();
-    if (search.length > 0) {
-      const pattern = `%${search}%`;
-      const searchCondition = or(
-        like(tenants.fullName, pattern),
-        like(tenants.phone, pattern),
-        like(tenants.secondPhoneNumber, pattern),
-        like(tenants.email, pattern),
-      );
-      if (searchCondition !== undefined) {
-        conditions.push(searchCondition);
-      }
+    const searchCondition = tenantSearchCondition(criteria.search);
+    if (searchCondition !== undefined) {
+      conditions.push(searchCondition);
     }
     const where = and(...conditions);
 
@@ -115,7 +147,8 @@ export class DrizzleTenantRepository implements TenantRepository {
       .select()
       .from(tenants)
       .where(where)
-      .orderBy(tenants.createdAt)
+      // Ties on `createdAt` are broken by id so offset pagination stays stable.
+      .orderBy(tenants.createdAt, tenants.id)
       .limit(criteria.limit)
       .offset(criteria.offset)
       .all()
